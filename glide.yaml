@@ -1,4 +1,4 @@
-package: scm.uninett.no/laas/goidc-proxy
+package: github.com/uninett/goidc-proxy
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/spf13/viper

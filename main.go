@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"scm.uninett.no/laas/goidc-proxy/conf"
-	"scm.uninett.no/laas/goidc-proxy/proxy"
+	"github.com/uninett/goidc-proxy/conf"
+	"github.com/uninett/goidc-proxy/proxy"
 	"time"
 )
 
