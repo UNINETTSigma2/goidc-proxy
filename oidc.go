@@ -10,16 +10,14 @@ import (
 	"net/http"
 )
 
-var audVerify oidc.VerificationOption
-var expVerify oidc.VerificationOption
-
-const cookieDur = 28800 // 60*60*8 (8 hours)
-const cookieName = "oidc-cookie"
-
 type Authenticator struct {
 	provider     *oidc.Provider
 	clientConfig oauth2.Config
 	ctx          context.Context
+	audVerify    oidc.VerificationOption
+	expVerify    oidc.VerificationOption
+	cookieDur    int
+	cookieName   string
 }
 
 func newAuthenticator(
@@ -43,13 +41,17 @@ func newAuthenticator(
 	}
 
 	// Enforce aud and expiry check, as library is not doing it by default
-	audVerify = oidc.VerifyAudience(clientID)
-	expVerify = oidc.VerifyExpiry()
+	audVerify := oidc.VerifyAudience(clientID)
+	expVerify := oidc.VerifyExpiry()
 
 	return &Authenticator{
 		provider:     provider,
 		clientConfig: config,
 		ctx:          ctx,
+		audVerify:    audVerify,
+		expVerify:    expVerify,
+		cookieDur:    28800, // 60*60*8 (8 hours)
+		cookieName:   "oidc-cookie",
 	}, nil
 }
 
@@ -71,7 +73,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
-		_, err = a.provider.Verifier(audVerify, expVerify).Verify(a.ctx, rawIDToken)
+		_, err = a.provider.Verifier(a.audVerify, a.expVerify).Verify(a.ctx, rawIDToken)
 		if err != nil {
 			http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -81,9 +83,9 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		// 	return
 		// }
 		http.SetCookie(w, &http.Cookie{
-			Name:   cookieName,
+			Name:   a.cookieName,
 			Value:  token.AccessToken,
-			MaxAge: cookieDur,
+			MaxAge: a.cookieDur,
 			Path:   "/",
 		})
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -92,7 +94,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(cookieName)
+		c, err := r.Cookie(a.cookieName)
 		if err != nil {
 			uid, err := uuid.V4()
 			if err != nil {
