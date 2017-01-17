@@ -8,7 +8,7 @@ import (
 	"github.com/m4rw3r/uuid"
 	"golang.org/x/oauth2"
 	"net/http"
-	"scm.uninett.no/laas/goidc-proxy/conf"
+	"github.com/uninett/goidc-proxy/conf"
 )
 
 type Authenticator struct {
