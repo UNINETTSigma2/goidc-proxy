@@ -8,6 +8,7 @@ import (
 	"github.com/m4rw3r/uuid"
 	"golang.org/x/oauth2"
 	"net/http"
+	"scm.uninett.no/laas/goidc-proxy/conf"
 )
 
 type Authenticator struct {
@@ -55,7 +56,7 @@ func newAuthenticator(
 		audVerify:    audVerify,
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
-		cookieName:   "oidc-cookie",
+		cookieName:   "goidc",
 		stateMap:     stateMap,
 	}, nil
 }
@@ -90,10 +91,12 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 		// Setup the cookie which will be used by client to authn later
 		http.SetCookie(w, &http.Cookie{
-			Name:   a.cookieName,
-			Value:  token.AccessToken,
-			MaxAge: a.cookieDur,
-			Path:   "/",
+			Name:     a.cookieName,
+			Value:    token.AccessToken,
+			MaxAge:   a.cookieDur,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   conf.GetBoolValue("server.securecookie"),
 		})
 		http.Redirect(w, r, path, http.StatusFound)
 	})
@@ -101,7 +104,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := r.Cookie(a.cookieName)
+		c, err := r.Cookie(a.cookieName)
 		if err != nil {
 			uid, err := uuid.V4()
 			if err != nil {
@@ -112,6 +115,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
 			return
 		}
+		r.Header.Add("Authorization", "Bearer "+c.Value)
 		next.ServeHTTP(w, r)
 	})
 }
