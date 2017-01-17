@@ -14,10 +14,14 @@ type Authenticator struct {
 	provider     *oidc.Provider
 	clientConfig oauth2.Config
 	ctx          context.Context
+<<<<<<< HEAD
 	audVerify    oidc.VerificationOption
 	expVerify    oidc.VerificationOption
 	cookieDur    int
 	cookieName   string
+=======
+	stateMap     TTLMap
+>>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 }
 
 func newAuthenticator(
@@ -41,26 +45,43 @@ func newAuthenticator(
 	}
 
 	// Enforce aud and expiry check, as library is not doing it by default
+<<<<<<< HEAD
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
+=======
+	audVerify = oidc.VerifyAudience(clientID)
+	expVerify = oidc.VerifyExpiry()
+	stateMap := TTLMap{m: make(map[string]Value)}
+	// Expire enteries as they come in a seperate routines
+	go expireEnteries(stateMap)
+>>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 
 	return &Authenticator{
 		provider:     provider,
 		clientConfig: config,
 		ctx:          ctx,
+<<<<<<< HEAD
 		audVerify:    audVerify,
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "oidc-cookie",
+=======
+		stateMap:     stateMap,
+>>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 	}, nil
 }
 
 func (a *Authenticator) callbackHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// if r.URL.Query().Get("state") != "state" {
-		// 	http.Error(w, "state did not match", http.StatusBadRequest)
-		// 	return
-		// }
+		// Fetch state & path from our map
+		path := getEntry(a.stateMap, r.URL.Query().Get("state"))
+		if path == "" {
+			http.Error(w, "state did not match", http.StatusBadRequest)
+			return
+		}
+		// Delete the entry as we are done with this authn request
+		delEntry(a.stateMap, r.URL.Query().Get("state"))
+
 		token, err := a.clientConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
 			log.Warn("no token found: %v", err)
@@ -78,32 +99,30 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// if err := idToken.Claims(&resp.IDTokenClaims); err != nil {
-		// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-		// 	return
-		// }
+		// Setup the cookie which will be used by client to authn later
 		http.SetCookie(w, &http.Cookie{
 			Name:   a.cookieName,
 			Value:  token.AccessToken,
 			MaxAge: a.cookieDur,
 			Path:   "/",
 		})
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, path, http.StatusFound)
 	})
 }
 
 func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(a.cookieName)
+		_, err := r.Cookie(a.cookieName)
 		if err != nil {
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
 			}
+			addEntry(a.stateMap, uid.String(), r.URL.String())
+			log.Debug(r.URL.String())
 			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
 			return
 		}
-		log.Debug("cookies is: ", c)
 		next.ServeHTTP(w, r)
 	})
 }
