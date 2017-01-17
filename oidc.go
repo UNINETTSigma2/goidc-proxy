@@ -14,14 +14,11 @@ type Authenticator struct {
 	provider     *oidc.Provider
 	clientConfig oauth2.Config
 	ctx          context.Context
-<<<<<<< HEAD
 	audVerify    oidc.VerificationOption
 	expVerify    oidc.VerificationOption
 	cookieDur    int
 	cookieName   string
-=======
 	stateMap     TTLMap
->>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 }
 
 func newAuthenticator(
@@ -45,29 +42,21 @@ func newAuthenticator(
 	}
 
 	// Enforce aud and expiry check, as library is not doing it by default
-<<<<<<< HEAD
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
-=======
-	audVerify = oidc.VerifyAudience(clientID)
-	expVerify = oidc.VerifyExpiry()
 	stateMap := TTLMap{m: make(map[string]Value)}
 	// Expire enteries as they come in a seperate routines
 	go expireEnteries(stateMap)
->>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 
 	return &Authenticator{
 		provider:     provider,
 		clientConfig: config,
 		ctx:          ctx,
-<<<<<<< HEAD
 		audVerify:    audVerify,
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "oidc-cookie",
-=======
 		stateMap:     stateMap,
->>>>>>> fffa98f09f2a4006d62eb27ac8ad226e33a7f65a
 	}, nil
 }
 
