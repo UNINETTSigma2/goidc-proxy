@@ -1,0 +1,20 @@
+{
+	"proxy": {
+		"target": "https://httbin.org"
+	},
+	"engine": {
+		"clientid": "clientid",
+		"clientsecret": "secret",
+		"issuerurl": "https://auth.dataporten.no",
+		"redirecturl": "http://localhost:8888/oauth2/callback",
+		"logging": {
+			"level": "debug"
+		}
+	},
+	"server": {
+		"port": 8888,
+		"cert": "cert.pem",
+		"key": "key.pem",
+		"ssl": false
+	}
+}
