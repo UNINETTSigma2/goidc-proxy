@@ -55,7 +55,7 @@ func newAuthenticator(
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "goidc",
-		signer:       NewSigner(),
+		signer:       NewSigner(conf.GetStringValue("server.signkey")),
 	}, nil
 }
 
@@ -67,9 +67,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
-		data := strings.Split(c.Value, "|")
-		if len(data) != 2 || !a.signer.checkHMAC(data[0], data[1]) {
-			log.Error("Signature does not match", data[0], data[1])
+		if !a.signer.checkSig(c.Value) {
+			http.Error(w, "Signature does not match", http.StatusBadRequest)
 			return
 		}
 
@@ -99,7 +98,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.securecookie"),
 		})
-		http.Redirect(w, r, data[0], http.StatusFound)
+		http.Redirect(w, r, strings.Split(c.Value, SEP)[0], http.StatusFound)
 	})
 }
 
@@ -112,10 +111,9 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				log.Warn("Failed in getting UUID", err)
 			}
 			// Setup the cookie which will be used to get the rediect path after authn
-			sig := a.signer.getHMAC(r.URL.String())
 			http.SetCookie(w, &http.Cookie{
 				Name:     uid.String(),
-				Value:    r.URL.String() + "|" + encodeToString(sig),
+				Value:    a.signer.getSignedData(r.URL.String()),
 				MaxAge:   300,
 				Path:     "/",
 				HttpOnly: true,
