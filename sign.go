@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	log "github.com/Sirupsen/logrus"
 	"hash"
-	"strings"
 )
 
 const SEP = "||"
@@ -41,16 +40,12 @@ func (s *Signer) getSignedData(data string) string {
 	return data + SEP + encodeToString(s.getHMAC(data))
 }
 
-func (s *Signer) checkSig(data string) bool {
-	sData := strings.Split(data, SEP)
-	if len(sData) != 2 {
-		return false
-	}
-	receivedHMAC, err := base64.URLEncoding.DecodeString(sData[1])
+func (s *Signer) checkSig(data string, recHMAC string) bool {
+	receivedHMAC, err := base64.URLEncoding.DecodeString(recHMAC)
 	if err != nil {
 		log.Warn("Failed in decoding signature data", err)
 		return false
 	}
-	gotHMAC := s.getHMAC(sData[0])
+	gotHMAC := s.getHMAC(data)
 	return hmac.Equal(gotHMAC, receivedHMAC)
 }

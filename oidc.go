@@ -9,7 +9,9 @@ import (
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Authenticator struct {
@@ -67,8 +69,9 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
-		if !a.signer.checkSig(c.Value) {
-			http.Error(w, "Signature does not match", http.StatusBadRequest)
+		cData := strings.Split(c.Value, SEP)
+		if len(cData) != 2 || !a.signer.checkSig(cData[0], cData[1]) {
+			http.Error(w, "Path signature does not match", http.StatusBadRequest)
 			return
 		}
 
@@ -78,22 +81,23 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		rawIDToken, ok := token.Extra("id_token").(string)
+		oidcToken, ok := token.Extra("id_token").(string)
 		if !ok {
 			http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
 			return
 		}
 
-		_, err = a.provider.Verifier(a.audVerify, a.expVerify).Verify(a.ctx, rawIDToken)
+		_, err = a.provider.Verifier(a.audVerify, a.expVerify).Verify(a.ctx, oidcToken)
 		if err != nil {
 			http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// Setup the cookie which will be used by client to authn later
+		cValue := token.AccessToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
 		http.SetCookie(w, &http.Cookie{
 			Name:     a.cookieName,
-			Value:    token.AccessToken,
-			MaxAge:   a.cookieDur,
+			Value:    a.signer.getSignedData(cValue),
+			MaxAge:   int(token.Expiry.Unix() - time.Now().Unix()),
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.securecookie"),
@@ -123,7 +127,35 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
 			return
 		}
+
+		if !a.checkTokenValidity(c.Value) {
+			uid, err := uuid.V4()
+			if err != nil {
+				log.Warn("Failed in getting UUID", err)
+			}
+			// Token is not valid, so redirecting to authenticate again
+			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
+			return
+		}
 		r.Header.Add("Authorization", "Bearer "+c.Value)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *Authenticator) checkTokenValidity(data string) bool {
+	cData := strings.Split(data, SEP)
+	if len(cData) != 3 || !a.signer.checkSig(cData[0]+SEP+cData[1], cData[2]) {
+		log.Warn("Token signature does not match")
+		return false
+	}
+	expTime, err := strconv.ParseInt(cData[1], 10, 64)
+	if err != nil {
+		log.Debug("Failed to parse the expiry time")
+		return false
+	}
+	if time.Now().Unix() > expTime {
+		log.Debug("Token has expired, will rediect to authnetication again")
+		return false
+	}
+	return true
 }
