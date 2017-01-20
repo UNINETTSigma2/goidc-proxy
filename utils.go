@@ -1,50 +1,46 @@
 package main
 
 import (
-	"sync"
-	"time"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	log "github.com/Sirupsen/logrus"
+	"github.com/uninett/goidc-proxy/conf"
+	"hash"
 )
 
-type Value struct {
-	Data string
-	TTL  int
+type Signer struct {
+	mac hash.Hash
+	key []byte
 }
 
-type TTLMap struct {
-	sync.RWMutex
-	m map[string]Value
+func NewSigner() *Signer {
+	s := new(Signer)
+	s.key = []byte(conf.GetStringValue("server.signkey"))
+	s.mac = hmac.New(sha256.New, s.key)
+	return s
 }
 
-func addEntry(dataMap TTLMap, key string, value string) {
-	dataMap.Lock()
-	dataMap.m[key] = Value{value, 300}
-	dataMap.Unlock()
+func encodeToString(data []byte) string {
+	return base64.URLEncoding.EncodeToString(data)
 }
 
-func delEntry(dataMap TTLMap, key string) {
-	dataMap.Lock()
-	delete(dataMap.m, key)
-	dataMap.Unlock()
-}
-
-func getEntry(dataMap TTLMap, key string) string {
-	dataMap.RLock()
-	v := dataMap.m[key]
-	dataMap.RUnlock()
-	return v.Data
-}
-
-func expireEnteries(dataMap TTLMap) bool {
-	for {
-		time.Sleep(10 * time.Second)
-		dataMap.Lock()
-		for k, v := range dataMap.m {
-			if v.TTL <= 0 {
-				delete(dataMap.m, k)
-			} else {
-				v.TTL = v.TTL - 10
-			}
-		}
-		dataMap.Unlock()
+func (s *Signer) getHMAC(data string) []byte {
+	s.mac.Reset() // Reset to initial state
+	pdata := []byte(data)
+	if _, err := s.mac.Write(pdata); err != nil {
+		log.Warn("Failed in getting HMAC", err)
+		return nil
 	}
+	return s.mac.Sum(nil)
+}
+
+func (s *Signer) checkHMAC(data string, recHMAC string) bool {
+	receivedHMAC, err := base64.URLEncoding.DecodeString(recHMAC)
+	if err != nil {
+		log.Warn("Failed in decoding signature data", err)
+		return false
+	}
+	gotHMAC := s.getHMAC(data)
+	return hmac.Equal(gotHMAC, receivedHMAC)
 }

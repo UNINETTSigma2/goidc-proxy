@@ -6,9 +6,10 @@ import (
 	oidc "github.com/coreos/go-oidc"
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/m4rw3r/uuid"
+	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
 	"net/http"
-	"github.com/uninett/goidc-proxy/conf"
+	"strings"
 )
 
 type Authenticator struct {
@@ -19,7 +20,7 @@ type Authenticator struct {
 	expVerify    oidc.VerificationOption
 	cookieDur    int
 	cookieName   string
-	stateMap     TTLMap
+	signer       *Signer
 }
 
 func newAuthenticator(
@@ -45,9 +46,6 @@ func newAuthenticator(
 	// Enforce aud and expiry check, as library is not doing it by default
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
-	stateMap := TTLMap{m: make(map[string]Value)}
-	// Expire enteries as they come in a seperate routines
-	go expireEnteries(stateMap)
 
 	return &Authenticator{
 		provider:     provider,
@@ -57,20 +55,23 @@ func newAuthenticator(
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "goidc",
-		stateMap:     stateMap,
+		signer:       NewSigner(),
 	}, nil
 }
 
 func (a *Authenticator) callbackHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Fetch state & path from our map
-		path := getEntry(a.stateMap, r.URL.Query().Get("state"))
-		if path == "" {
+		// Fetch state from cookie & path from cookie value
+		c, err := r.Cookie(r.URL.Query().Get("state"))
+		if err != nil {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
-		// Delete the entry as we are done with this authn request
-		delEntry(a.stateMap, r.URL.Query().Get("state"))
+		data := strings.Split(c.Value, "|")
+		if len(data) != 2 || !a.signer.checkHMAC(data[0], data[1]) {
+			log.Error("Signature does not match", data[0], data[1])
+			return
+		}
 
 		token, err := a.clientConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
@@ -98,7 +99,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.securecookie"),
 		})
-		http.Redirect(w, r, path, http.StatusFound)
+		http.Redirect(w, r, data[0], http.StatusFound)
 	})
 }
 
@@ -110,8 +111,17 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
 			}
-			addEntry(a.stateMap, uid.String(), r.URL.String())
-			log.Debug(r.URL.String())
+			// Setup the cookie which will be used to get the rediect path after authn
+			sig := a.signer.getHMAC(r.URL.String())
+			http.SetCookie(w, &http.Cookie{
+				Name:     uid.String(),
+				Value:    r.URL.String() + "|" + encodeToString(sig),
+				MaxAge:   300,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   conf.GetBoolValue("server.securecookie"),
+			})
+			log.Debug("Path is: ", r.URL.String())
 			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
 			return
 		}
