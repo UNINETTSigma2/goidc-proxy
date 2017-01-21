@@ -89,7 +89,7 @@ func main() {
 	http.Handle("/", authn.authHandler(target))
 
 	// Start proxying
-	log.Println("Proxy initialized and listening on port ", conf.GetIntValue("server.port"))
+	log.Println("Proxy initialized and listening on port", conf.GetIntValue("server.port"))
 	startTime = time.Now()
 	port := conf.GetIntValue("server.port")
 	ssl := conf.GetBoolValue("server.ssl")

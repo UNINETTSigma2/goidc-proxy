@@ -25,6 +25,7 @@ type Authenticator struct {
 	signer             *Signer
 	acr                oauth2.AuthCodeOption
 	twofactorPricipals map[string]struct{}
+	rediectMap         TTLMap
 }
 
 func newAuthenticator(
@@ -60,6 +61,9 @@ func newAuthenticator(
 	for i := range twofaSvals {
 		twofaPmap[twofaSvals[i]] = struct{}{}
 	}
+	redirectMap := TTLMap{m: make(map[string]Value)}
+	// Expire enteries in a seperate routines
+	go expireEnteries(redirectMap)
 
 	return &Authenticator{
 		provider:           provider,
@@ -72,6 +76,7 @@ func newAuthenticator(
 		signer:             NewSigner(conf.GetStringValue("engine.signkey")),
 		acr:                acrVal,
 		twofactorPricipals: twofaPmap,
+		rediectMap:         redirectMap,
 	}, nil
 }
 
@@ -108,15 +113,18 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		// Get user info and see if is in the list of twofactor_principals
-		if !conf.GetBoolValue("engine.twofactor_all") {
+		if !conf.GetBoolValue("engine.twofactor_all") && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
 			}
-			if _, ok := a.twofactorPricipals[userInfo.Subject]; ok && a.acr != nil {
+			_, ok := a.twofactorPricipals[userInfo.Subject]
+			if ok && getEntry(a.rediectMap, userInfo.Subject) == 0 {
 				//spew.Dump(w)
 				log.Debug("Redirecting for Two factor auth")
+				addEntry(a.rediectMap, userInfo.Subject, time.Now().Unix())
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
+				return
 			}
 		}
 
