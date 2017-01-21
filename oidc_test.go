@@ -3,8 +3,10 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -38,7 +40,7 @@ func TestAuthHandlerRedirect(t *testing.T) {
 	auth := &Authenticator{
 		clientConfig: dummyConfig,
 		cookieName:   "test-cookie",
-		stateMap:     TTLMap{m: make(map[string]Value)},
+		signer:       NewSigner("test"),
 	}
 
 	assert := assert.New(t)
@@ -54,15 +56,77 @@ func TestAuthHandlerRedirect(t *testing.T) {
 	assert.True(strings.HasPrefix(loc, dummyConfig.Endpoint.AuthURL+"?client_id="+dummyConfig.ClientID), "Redirect to correct URL")
 }
 
-func TestAuthHandlerCookie(t *testing.T) {
+func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
 		clientConfig: dummyConfig,
 		cookieName:   "test-cookie",
-		stateMap:     TTLMap{m: make(map[string]Value)},
+		signer:       NewSigner("test"),
 	}
 
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
+	dummyCookie.Value = "dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()+3600, 10)
+	r.AddCookie(dummyCookie)
+	w := httptest.NewRecorder()
+
+	ah := auth.authHandler(testAuthHandler(t))
+	ah.ServeHTTP(w, r)
+
+	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+}
+
+func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
+	auth := &Authenticator{
+		clientConfig: dummyConfig,
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+	}
+
+	assert := assert.New(t)
+	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
+	dummyCookie.Value = auth.signer.getSignedData(
+		"dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()-3600, 10))
+	r.AddCookie(dummyCookie)
+	w := httptest.NewRecorder()
+
+	ah := auth.authHandler(testAuthHandler(t))
+	ah.ServeHTTP(w, r)
+
+	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+}
+
+func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
+	auth := &Authenticator{
+		clientConfig: dummyConfig,
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+	}
+
+	assert := assert.New(t)
+	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
+	dummyCookie.Value = auth.signer.getSignedData(
+		"dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()+3600, 10))
+	dummyCookie.Value = dummyCookie.Value + "badsig"
+	r.AddCookie(dummyCookie)
+	w := httptest.NewRecorder()
+
+	ah := auth.authHandler(testAuthHandler(t))
+	ah.ServeHTTP(w, r)
+
+	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+}
+
+func TestAuthHandlerCookie(t *testing.T) {
+	auth := &Authenticator{
+		clientConfig: dummyConfig,
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+	}
+
+	assert := assert.New(t)
+	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
+	dummyCookie.Value = auth.signer.getSignedData(
+		"dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()+3600, 10))
 	r.AddCookie(dummyCookie)
 	w := httptest.NewRecorder()
 
