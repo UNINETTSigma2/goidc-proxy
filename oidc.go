@@ -23,6 +23,7 @@ type Authenticator struct {
 	cookieDur    int
 	cookieName   string
 	signer       *Signer
+	acr          oauth2.AuthCodeOption
 }
 
 func newAuthenticator(
@@ -48,6 +49,10 @@ func newAuthenticator(
 	// Enforce aud and expiry check, as library is not doing it by default
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
+	var acrVal oauth2.AuthCodeOption
+	if conf.GetStringValue("server.acr_values") != "" {
+		acrVal = oauth2.SetAuthURLParam("acr_values", conf.GetStringValue("server.acr_values"))
+	}
 
 	return &Authenticator{
 		provider:     provider,
@@ -58,6 +63,7 @@ func newAuthenticator(
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "goidc",
 		signer:       NewSigner(conf.GetStringValue("server.signkey")),
+		acr:          acrVal,
 	}, nil
 }
 
@@ -124,7 +130,11 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				Secure:   conf.GetBoolValue("server.securecookie"),
 			})
 			log.Debug("Path is: ", r.URL.String())
-			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
+			if (a.acr) != nil {
+				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
+			} else {
+				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
+			}
 			return
 		}
 
@@ -134,7 +144,11 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				log.Warn("Failed in getting UUID", err)
 			}
 			// Token is not valid, so redirecting to authenticate again
-			http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
+			if (a.acr) != nil {
+				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
+			} else {
+				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
+			}
 			return
 		}
 		r.Header.Add("Authorization", "Bearer "+c.Value)
