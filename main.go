@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/uninett/goidc-proxy/conf"
+	"github.com/uninett/goidc-proxy/proxy"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"github.com/uninett/goidc-proxy/conf"
-	"github.com/uninett/goidc-proxy/proxy"
 	"time"
 )
 
@@ -75,10 +75,10 @@ func main() {
 	// Create proxy and middleware
 	target := proxy.NewReverseProxy(targetURL)
 	authn, err := newAuthenticator(
-		conf.GetStringValue("engine.clientid"),
-		conf.GetStringValue("engine.clientsecret"),
-		conf.GetStringValue("engine.redirecturl"),
-		conf.GetStringValue("engine.issuerurl"))
+		conf.GetStringValue("engine.client_id"),
+		conf.GetStringValue("engine.client_secret"),
+		conf.GetStringValue("engine.redirect_url"),
+		conf.GetStringValue("engine.issuer_url"))
 	if err != nil {
 		log.Fatal("Failed in getting authenticator", err)
 	}
@@ -96,7 +96,7 @@ func main() {
 	go listenHTTP(ssl, port)
 
 	// Start TCP server for health checks
-	healthPort := conf.GetIntValue("server.healthCheckPort")
+	healthPort := conf.GetIntValue("server.health_port")
 	server, err := net.Listen("tcp", fmt.Sprintf(":%d", healthPort))
 	if server == nil {
 		panic("couldn't set up tcp socket: " + err.Error())

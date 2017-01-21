@@ -50,8 +50,8 @@ func newAuthenticator(
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
 	var acrVal oauth2.AuthCodeOption
-	if conf.GetStringValue("server.acr_values") != "" {
-		acrVal = oauth2.SetAuthURLParam("acr_values", conf.GetStringValue("server.acr_values"))
+	if conf.GetStringValue("engine.acr_values") != "" {
+		acrVal = oauth2.SetAuthURLParam("acr_values", conf.GetStringValue("engine.acr_values"))
 	}
 
 	return &Authenticator{
@@ -62,7 +62,7 @@ func newAuthenticator(
 		expVerify:    expVerify,
 		cookieDur:    28800, // 60*60*8 (8 hours)
 		cookieName:   "goidc",
-		signer:       NewSigner(conf.GetStringValue("server.signkey")),
+		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
 		acr:          acrVal,
 	}, nil
 }
@@ -106,7 +106,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			MaxAge:   int(token.Expiry.Unix() - time.Now().Unix()),
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   conf.GetBoolValue("server.securecookie"),
+			Secure:   conf.GetBoolValue("server.secure_cookie"),
 		})
 		http.Redirect(w, r, strings.Split(c.Value, SEP)[0], http.StatusFound)
 	})

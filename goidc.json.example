@@ -1,20 +1,25 @@
 {
 	"proxy": {
-		"target": "https://httbin.org"
+		"target": "https://httpbin.org"
 	},
 	"engine": {
-		"clientid": "clientid",
-		"clientsecret": "secret",
-		"issuerurl": "https://auth.dataporten.no",
-		"redirecturl": "http://localhost:8888/oauth2/callback",
+		"client_id": "00000-0000-000-000-00",
+		"client_secret": "00000-0000-000-000-00",
+		"issuer_url": "https://auth.dataporten.no",
+		"redirect_url": "http://localhost:8888/oauth2/callback",
+		"signkey": "testtesttesttest",
+		"acr_values": "",
+		"twofactor_prinicpals": "",
 		"logging": {
 			"level": "debug"
 		}
 	},
 	"server": {
 		"port": 8888,
+		"health_port": 1337,
 		"cert": "cert.pem",
 		"key": "key.pem",
-		"ssl": false
+		"ssl": false,
+		"secure_cookie": false
 	}
 }
