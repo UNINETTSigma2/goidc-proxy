@@ -15,15 +15,16 @@ import (
 )
 
 type Authenticator struct {
-	provider     *oidc.Provider
-	clientConfig oauth2.Config
-	ctx          context.Context
-	audVerify    oidc.VerificationOption
-	expVerify    oidc.VerificationOption
-	cookieDur    int
-	cookieName   string
-	signer       *Signer
-	acr          oauth2.AuthCodeOption
+	provider           *oidc.Provider
+	clientConfig       oauth2.Config
+	ctx                context.Context
+	audVerify          oidc.VerificationOption
+	expVerify          oidc.VerificationOption
+	cookieDur          int
+	cookieName         string
+	signer             *Signer
+	acr                oauth2.AuthCodeOption
+	twofactorPricipals map[string]struct{}
 }
 
 func newAuthenticator(
@@ -38,12 +39,13 @@ func newAuthenticator(
 		return nil, err
 	}
 
+	scopes := strings.Split(conf.GetStringValue("engine.scopes"), ",")
 	config := oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  redirectUrl,
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       append([]string{oidc.ScopeOpenID}, scopes...),
 	}
 
 	// Enforce aud and expiry check, as library is not doing it by default
@@ -53,17 +55,23 @@ func newAuthenticator(
 	if conf.GetStringValue("engine.acr_values") != "" {
 		acrVal = oauth2.SetAuthURLParam("acr_values", conf.GetStringValue("engine.acr_values"))
 	}
+	twofaSvals := strings.Split(conf.GetStringValue("engine.twofactor_principals"), ",")
+	twofaPmap := make(map[string]struct{})
+	for i := range twofaSvals {
+		twofaPmap[twofaSvals[i]] = struct{}{}
+	}
 
 	return &Authenticator{
-		provider:     provider,
-		clientConfig: config,
-		ctx:          ctx,
-		audVerify:    audVerify,
-		expVerify:    expVerify,
-		cookieDur:    28800, // 60*60*8 (8 hours)
-		cookieName:   "goidc",
-		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
-		acr:          acrVal,
+		provider:           provider,
+		clientConfig:       config,
+		ctx:                ctx,
+		audVerify:          audVerify,
+		expVerify:          expVerify,
+		cookieDur:          28800, // 60*60*8 (8 hours)
+		cookieName:         "goidc",
+		signer:             NewSigner(conf.GetStringValue("engine.signkey")),
+		acr:                acrVal,
+		twofactorPricipals: twofaPmap,
 	}, nil
 }
 
@@ -98,6 +106,20 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		// Get user info and see if is in the list of twofactor_principals
+		if !conf.GetBoolValue("engine.twofactor_all") {
+			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
+			if err != nil {
+				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
+			}
+			if _, ok := a.twofactorPricipals[userInfo.Subject]; ok && a.acr != nil {
+				//spew.Dump(w)
+				log.Debug("Redirecting for Two factor auth")
+				http.Redirect(w, r, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
+			}
+		}
+
 		// Setup the cookie which will be used by client to authn later
 		cValue := token.AccessToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
 		http.SetCookie(w, &http.Cookie{
@@ -130,7 +152,9 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				Secure:   conf.GetBoolValue("server.securecookie"),
 			})
 			log.Debug("Path is: ", r.URL.String())
-			if (a.acr) != nil {
+			// Check if we have two factor enable for all or selected principals, if for selected
+			//  we will redirect for twofactor auth after getting user identity
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor_all") {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
 			} else {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
@@ -144,7 +168,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				log.Warn("Failed in getting UUID", err)
 			}
 			// Token is not valid, so redirecting to authenticate again
-			if (a.acr) != nil {
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor_all") {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
 			} else {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
