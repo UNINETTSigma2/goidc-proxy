@@ -25,7 +25,6 @@ type Authenticator struct {
 	ctx                context.Context
 	audVerify          oidc.VerificationOption
 	expVerify          oidc.VerificationOption
-	cookieDur          int
 	cookieName         string
 	signer             *Signer
 	acr                oauth2.AuthCodeOption
@@ -76,7 +75,6 @@ func newAuthenticator(
 		ctx:                ctx,
 		audVerify:          audVerify,
 		expVerify:          expVerify,
-		cookieDur:          28800, // 60*60*8 (8 hours)
 		cookieName:         "goidc",
 		signer:             NewSigner(conf.GetStringValue("engine.signkey")),
 		acr:                acrVal,
