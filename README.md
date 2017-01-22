@@ -1,6 +1,8 @@
 # OpenID Connect Proxy
 
-The proxy is based on [coreos/go-oidc](https://github.com/coreos/go-oidc/) package. It supports simple proxying for any OpenIDConnect providers. In addition to that it has support for two factor authentication which is primarily tested for [Dataporten](https://docs.dataporten.no/). Two factor can be enabled for selected users/groups or for all the users. You can forward either `OAuth2 Accesstoken (oauth2)` or `JWT Token (jwt)` in `Authorization` header. The `OAuth2 Accesstoken`is the default option for sending to downstream target application. This is useful depending upon your target application configured under `proxy` section.
+The proxy is based on [coreos/go-oidc](https://github.com/coreos/go-oidc/) package. It supports simple proxying request based on authentication from any OpenID Connect providers. You can forward either `OAuth2 Accesstoken (oauth2)` or `JWT Token (jwt)` in `Authorization` header. The `OAuth2 Accesstoken`is the default option for sending to downstream target application. This is useful depending upon your target application configured under `proxy` section.
+
+In addition to that it has support for two factor authentication which is primarily tested for [Dataporten](https://docs.dataporten.no/). Two factor can be enabled for selected users/groups or for all the users.
 
 ## Authentication with Dataporten
 
