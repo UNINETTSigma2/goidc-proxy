@@ -2,7 +2,6 @@ package main
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/parnurzeal/gorequest"
 )
 
@@ -22,6 +21,8 @@ func getGroups(token string, url string) ([]string, []error) {
 		log.Warn("Failed in fetching groups", err)
 		return nil, err
 	}
-	spew.Dump(groupBody)
+	for _, grp := range groupBody {
+		groups = append(groups, grp.ID)
+	}
 	return groups, nil
 }

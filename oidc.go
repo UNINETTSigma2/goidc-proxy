@@ -5,6 +5,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
 	//"github.com/davecgh/go-spew/spew"
+	"errors"
 	"github.com/m4rw3r/uuid"
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
@@ -13,6 +14,10 @@ import (
 	"strings"
 	"time"
 )
+
+type UserIDSec struct {
+	ID []string `json:"dataporten-userid_sec"`
+}
 
 type Authenticator struct {
 	provider           *oidc.Provider
@@ -117,18 +122,23 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 
-			if conf.GetStringValue("engine.groups_endpoint") != "" {
-				getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
-			}
-			_, ok := a.twofactorPricipals[userInfo.Subject]
-			if ok && getEntry(a.rediectMap, userInfo.Subject) == 0 {
-				//spew.Dump(w)
-				log.Debug("Redirecting for Two factor auth")
-				addEntry(a.rediectMap, userInfo.Subject, time.Now().Unix())
-				http.Redirect(w, r, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
-				return
+			// Check if we are have redirected already then create cookie directly
+			if getEntry(a.rediectMap, userInfo.Subject) == 0 {
+				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo)
+				if err != nil {
+					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if rediect {
+					//spew.Dump(w)
+					log.Debug("Redirecting for Two factor auth with UserID", userInfo.Subject)
+					addEntry(a.rediectMap, userInfo.Subject, time.Now().Unix())
+					http.Redirect(w, r, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
+					return
+				}
 			}
 		}
 
@@ -215,4 +225,36 @@ func (a *Authenticator) checkTokenValidity(data string) bool {
 		return false
 	}
 	return true
+}
+
+func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo) (bool, error) {
+	var userPrincipals []string
+	var userIdSec UserIDSec
+
+	userPrincipals = append(userPrincipals, userInfo.Subject)
+	err := userInfo.Claims(&userIdSec)
+	if err != nil {
+		log.Warn("Failed in getting Feide ID", err)
+		return false, err
+	}
+	if len(userIdSec.ID) > 0 {
+		userPrincipals = append(userPrincipals, userIdSec.ID...)
+	}
+
+	if conf.GetStringValue("engine.groups_endpoint") != "" {
+		groups, err := getGroups(token, conf.GetStringValue("engine.groups_endpoint"))
+		if err != nil {
+			log.Warn("Failed to getting User groups", err)
+			return false, errors.New("Failed to getting User groups")
+		}
+		userPrincipals = append(userPrincipals, groups...)
+	}
+
+	for _, p := range userPrincipals {
+		if _, ok := a.twofactorPricipals[p]; ok {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
