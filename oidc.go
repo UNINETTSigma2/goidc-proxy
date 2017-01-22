@@ -108,15 +108,19 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		_, err = a.provider.Verifier(a.audVerify, a.expVerify).Verify(a.ctx, oidcToken)
 		if err != nil {
-			http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Get user info and see if is in the list of twofactor_principals
+		// Get user info and see if user/affiliations are in the list of twofactor_principals
 		if !conf.GetBoolValue("engine.twofactor_all") && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
+			}
+
+			if conf.GetStringValue("engine.groups_endpoint") != "" {
+				getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
 			}
 			_, ok := a.twofactorPricipals[userInfo.Subject]
 			if ok && getEntry(a.rediectMap, userInfo.Subject) == 0 {
@@ -128,8 +132,15 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			}
 		}
 
+		// Check if downstream application wants JWT or OAuth2 token
+		var cToken string
+		if conf.GetStringValue("engine.token_type") == "jwt" {
+			cToken = oidcToken
+		} else {
+			cToken = token.AccessToken
+		}
 		// Setup the cookie which will be used by client to authn later
-		cValue := token.AccessToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
+		cValue := cToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
 		http.SetCookie(w, &http.Cookie{
 			Name:     a.cookieName,
 			Value:    a.signer.getSignedData(cValue),
