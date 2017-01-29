@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
 	//"github.com/davecgh/go-spew/spew"
-	"errors"
 	"github.com/m4rw3r/uuid"
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
@@ -20,16 +20,16 @@ type UserIDSec struct {
 }
 
 type Authenticator struct {
-	provider           *oidc.Provider
-	clientConfig       oauth2.Config
-	ctx                context.Context
-	audVerify          oidc.VerificationOption
-	expVerify          oidc.VerificationOption
-	cookieName         string
-	signer             *Signer
-	acr                oauth2.AuthCodeOption
-	twofactorPricipals map[string]struct{}
-	rediectMap         TTLMap
+	provider     *oidc.Provider
+	clientConfig oauth2.Config
+	ctx          context.Context
+	audVerify    oidc.VerificationOption
+	expVerify    oidc.VerificationOption
+	cookieName   string
+	signer       *Signer
+	acr          oauth2.AuthCodeOption
+	tfPrinipals  map[string]struct{}
+	redirectMap  TTLMap
 }
 
 func newAuthenticator(
@@ -57,30 +57,47 @@ func newAuthenticator(
 	audVerify := oidc.VerifyAudience(clientID)
 	expVerify := oidc.VerifyExpiry()
 	var acrVal oauth2.AuthCodeOption
-	if conf.GetStringValue("engine.acr_values") != "" {
-		acrVal = oauth2.SetAuthURLParam("acr_values", conf.GetStringValue("engine.acr_values"))
+	if conf.GetStringValue("engine.twofactor.acr_values") != "" {
+		acrVal = oauth2.SetAuthURLParam("acr_values",
+			conf.GetStringValue("engine.twofactor.acr_values"))
 	}
-	twofaSvals := strings.Split(conf.GetStringValue("engine.twofactor_principals"), ",")
-	twofaPmap := make(map[string]struct{})
-	for i := range twofaSvals {
-		twofaPmap[twofaSvals[i]] = struct{}{}
+
+	var tfPMap map[string]struct{}
+	if conf.GetStringValue("engine.twofactor.principals") != "" {
+		tfSvals := strings.Split(conf.GetStringValue("engine.twofactor.principals"), ",")
+		tfPMap = make(map[string]struct{})
+		for i := range tfSvals {
+			tfPMap[tfSvals[i]] = struct{}{}
+		}
 	}
 	redirectMap := TTLMap{m: make(map[string]Value)}
-	// Expire enteries in a seperate routines
-	go expireEnteries(redirectMap)
 
-	return &Authenticator{
-		provider:           provider,
-		clientConfig:       config,
-		ctx:                ctx,
-		audVerify:          audVerify,
-		expVerify:          expVerify,
-		cookieName:         "goidc",
-		signer:             NewSigner(conf.GetStringValue("engine.signkey")),
-		acr:                acrVal,
-		twofactorPricipals: twofaPmap,
-		rediectMap:         redirectMap,
-	}, nil
+	authneticator := &Authenticator{
+		provider:     provider,
+		clientConfig: config,
+		ctx:          ctx,
+		audVerify:    audVerify,
+		expVerify:    expVerify,
+		cookieName:   "goidc",
+		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
+		acr:          acrVal,
+		tfPrinipals:  tfPMap,
+		redirectMap:  redirectMap,
+	}
+
+	// If Twofactor principals needs to be fecthed from Elasticsearch then get it
+	if conf.GetStringValue("engine.twofactor.backend") != "" {
+		if len(authneticator.tfPrinipals) != 0 {
+			log.Warn("Both Two factor principals and backend is set, backend will take precedence")
+		}
+		tokenSource := newTokenSource(clientID, clientSecret, config.Endpoint.TokenURL)
+		go authneticator.fetchPrincipals(tokenSource)
+	}
+
+	// Expire enteries in a seperate routines
+	go expireEnteries(authneticator.redirectMap)
+
+	return authneticator, nil
 }
 
 func (a *Authenticator) callbackHandler() http.Handler {
@@ -116,7 +133,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		// Get user info and see if user/affiliations are in the list of twofactor_principals
-		if !conf.GetBoolValue("engine.twofactor_all") && a.acr != nil {
+		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
@@ -124,16 +141,15 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			}
 
 			// Check if we are have redirected already then create cookie directly
-			if getEntry(a.rediectMap, userInfo.Subject) == 0 {
+			if getEntry(a.redirectMap, userInfo.Subject) == 0 {
 				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo)
 				if err != nil {
 					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
 				if rediect {
-					//spew.Dump(w)
-					log.Debug("Redirecting for Two factor auth with UserID", userInfo.Subject)
-					addEntry(a.rediectMap, userInfo.Subject, time.Now().Unix())
+					log.Debug("Redirecting for Two factor auth with UserID ", userInfo.Subject)
+					addEntry(a.redirectMap, userInfo.Subject, time.Now().Unix())
 					http.Redirect(w, r, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
 					return
 				}
@@ -176,12 +192,12 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				MaxAge:   300,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   conf.GetBoolValue("server.securecookie"),
+				Secure:   conf.GetBoolValue("server.secure_cookie"),
 			})
 			log.Debug("Path is: ", r.URL.String())
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
-			if a.acr != nil && conf.GetBoolValue("engine.twofactor_all") {
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
 			} else {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
@@ -195,7 +211,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				log.Warn("Failed in getting UUID", err)
 			}
 			// Token is not valid, so redirecting to authenticate again
-			if a.acr != nil && conf.GetBoolValue("engine.twofactor_all") {
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
 			} else {
 				http.Redirect(w, r, a.clientConfig.AuthCodeURL(uid.String()), http.StatusFound)
@@ -249,10 +265,21 @@ func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo
 	}
 
 	for _, p := range userPrincipals {
-		if _, ok := a.twofactorPricipals[p]; ok {
+		if _, ok := a.tfPrinipals[p]; ok {
 			return true, nil
 		}
 	}
 
 	return false, nil
+}
+
+func (a *Authenticator) fetchPrincipals(tokenSource oauth2.TokenSource) {
+	for {
+		time.Sleep(10 * time.Second)
+		tfMap := getTFPrincipals(tokenSource)
+		// TFMap is nil, keep using the old data
+		if tfMap != nil {
+			a.tfPrinipals = tfMap
+		}
+	}
 }

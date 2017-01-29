@@ -48,6 +48,7 @@ func expireEnteries(dataMap TTLMap) bool {
 				delete(dataMap.m, k)
 			} else {
 				v.TTL = v.TTL - 10
+				dataMap.m[k] = v
 			}
 		}
 		dataMap.Unlock()
