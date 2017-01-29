@@ -7,11 +7,16 @@
 		"client_secret": "00000-0000-000-000-00",
 		"issuer_url": "https://auth.dataporten.no",
 		"redirect_url": "http://localhost:8888/oauth2/callback",
-		"scopes": "userid,groups,userid-feide",
+		"scopes": "userid,groups",
 		"signkey": "testtesttesttest",
-		"acr_values": "",
-		"twofactor_prinicpals": "",
-		"twofactor_all": false,
+		"groups_endpoint": "https://groups-api.dataporten.no/groups/me/groups",
+		"token_type": "oauth2",
+		"twofactor": {
+			"all": false,
+			"principals": "",
+			"acr_values": "",
+			"backend": ""
+		},
 		"logging": {
 			"level": "debug"
 		}
