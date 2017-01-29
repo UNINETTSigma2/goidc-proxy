@@ -18,13 +18,16 @@ In addition to that it has support for two factor authentication which is primar
         "redirect_url": "http://localhost:8888/oauth2/callback",
         "scopes": "userid",
         "signkey": "testtesttesttest",
-        "acr_values": "",
-        "twofactor_principals": "",
-        "twofactor_all": false,
         "groups_endpoint": "",
         "token_type": "oauth2",
+        "twofactor": {
+            "all": false,
+            "principals": "",
+            "acr_values": "",
+            "backend": ""
+        },
         "logging": {
-            "level": "debug"
+            "level": "info"
         }
     },
     "server": {
@@ -32,8 +35,8 @@ In addition to that it has support for two factor authentication which is primar
         "health_port": 1337,
         "cert": "cert.pem",
         "key": "key.pem",
-        "ssl": true,
-        "secure_cookie": true
+        "ssl": false,
+        "secure_cookie": false
     }
 }
 ```
@@ -56,13 +59,16 @@ The configuration file for using Google as [OpenID provider](https://developers.
         "redirect_url": "http://localhost:8888/oauth2/callback",
         "scopes": "email",
         "signkey": "testtesttesttest",
-        "acr_values": "",
-        "twofactor_principals": "",
-        "twofactor_all": false,
         "groups_endpoint": "",
         "token_type": "oauth2",
+        "twofactor": {
+            "all": false,
+            "principals": "",
+            "acr_values": "",
+            "backend": ""
+        },
         "logging": {
-            "level": "info"
+            "level": "debug"
         }
     },
     "server": {
@@ -70,8 +76,8 @@ The configuration file for using Google as [OpenID provider](https://developers.
         "health_port": 1337,
         "cert": "cert.pem",
         "key": "key.pem",
-        "ssl": true,
-        "secure_cookie": true
+        "ssl": false,
+        "secure_cookie": false
     }
 }
 ```
