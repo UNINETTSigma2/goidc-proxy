@@ -205,7 +205,8 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		if !a.checkTokenValidity(c.Value) {
+		recToken, valid := a.checkTokenValidity(c.Value)
+		if !valid {
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
@@ -218,27 +219,27 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			}
 			return
 		}
-		r.Header.Add("Authorization", "Bearer "+c.Value)
+		r.Header.Add("Authorization", "Bearer "+recToken)
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (a *Authenticator) checkTokenValidity(data string) bool {
+func (a *Authenticator) checkTokenValidity(data string) (string, bool) {
 	cData := strings.Split(data, SEP)
 	if len(cData) != 3 || !a.signer.checkSig(cData[0]+SEP+cData[1], cData[2]) {
 		log.Warn("Token signature does not match")
-		return false
+		return "", false
 	}
 	expTime, err := strconv.ParseInt(cData[1], 10, 64)
 	if err != nil {
 		log.Debug("Failed to parse the expiry time")
-		return false
+		return "", false
 	}
 	if time.Now().Unix() > expTime {
 		log.Debug("Token has expired, will rediect to authnetication again")
-		return false
+		return "", false
 	}
-	return true
+	return cData[0], true
 }
 
 func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo) (bool, error) {
