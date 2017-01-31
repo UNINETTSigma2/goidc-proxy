@@ -38,11 +38,11 @@ func testAuthHandler(t *testing.T) http.Handler {
 
 func TestAuthHandlerRedirect(t *testing.T) {
 	auth := &Authenticator{
-		clientConfig: dummyConfig,
-		cookieName:   "test-cookie",
-		signer:       NewSigner("test"),
+		cookieName: "test-cookie",
+		signer:     NewSigner("test"),
 	}
 
+	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	w := httptest.NewRecorder()
@@ -58,11 +58,11 @@ func TestAuthHandlerRedirect(t *testing.T) {
 
 func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		clientConfig: dummyConfig,
-		cookieName:   "test-cookie",
-		signer:       NewSigner("test"),
+		cookieName: "test-cookie",
+		signer:     NewSigner("test"),
 	}
 
+	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = "dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()+3600, 10)
@@ -77,11 +77,11 @@ func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		clientConfig: dummyConfig,
-		cookieName:   "test-cookie",
-		signer:       NewSigner("test"),
+		cookieName: "test-cookie",
+		signer:     NewSigner("test"),
 	}
 
+	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(
@@ -97,11 +97,11 @@ func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		clientConfig: dummyConfig,
-		cookieName:   "test-cookie",
-		signer:       NewSigner("test"),
+		cookieName: "test-cookie",
+		signer:     NewSigner("test"),
 	}
 
+	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(
@@ -118,11 +118,11 @@ func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerCookie(t *testing.T) {
 	auth := &Authenticator{
-		clientConfig: dummyConfig,
-		cookieName:   "test-cookie",
-		signer:       NewSigner("test"),
+		cookieName: "test-cookie",
+		signer:     NewSigner("test"),
 	}
 
+	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(
