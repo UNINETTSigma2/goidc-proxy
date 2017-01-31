@@ -5,7 +5,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/uninett/goidc-proxy/conf"
-	"github.com/uninett/goidc-proxy/proxy"
 	"net"
 	"net/http"
 	"net/url"
@@ -73,7 +72,7 @@ func main() {
 	}
 
 	// Create proxy and middleware
-	target := proxy.NewReverseProxy(targetURL)
+	target := NewReverseProxy(targetURL)
 	authn, err := newAuthenticator(
 		conf.GetStringValue("engine.client_id"),
 		conf.GetStringValue("engine.client_secret"),
