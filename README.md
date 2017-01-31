@@ -22,9 +22,9 @@ In addition to that it has support for two factor authentication which is primar
         "token_type": "oauth2",
         "twofactor": {
             "all": false,
+            "redirect_on_response": false,
             "principals": "",
             "acr_values": "",
-            "backend": ""
         },
         "logging": {
             "level": "info"
@@ -63,9 +63,9 @@ The configuration file for using Google as [OpenID provider](https://developers.
         "token_type": "oauth2",
         "twofactor": {
             "all": false,
+            "redirect_on_response": false,
             "principals": "",
             "acr_values": "",
-            "backend": ""
         },
         "logging": {
             "level": "debug"
