@@ -3,16 +3,18 @@ package main
 import (
 	"context"
 	"errors"
+
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
 	//"github.com/davecgh/go-spew/spew"
-	"github.com/m4rw3r/uuid"
-	"github.com/uninett/goidc-proxy/conf"
-	"golang.org/x/oauth2"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/m4rw3r/uuid"
+	"github.com/uninett/goidc-proxy/conf"
+	"golang.org/x/oauth2"
 )
 
 type UserIDSec struct {
@@ -23,10 +25,9 @@ var oauthConfig oauth2.Config
 
 type Authenticator struct {
 	provider     *oidc.Provider
+	verifier     *oidc.IDTokenVerifier
 	clientConfig oauth2.Config
 	ctx          context.Context
-	audVerify    oidc.VerificationOption
-	expVerify    oidc.VerificationOption
 	cookieName   string
 	signer       *Signer
 	acr          oauth2.AuthCodeOption
@@ -54,10 +55,12 @@ func newAuthenticator(
 		RedirectURL:  redirectUrl,
 		Scopes:       append([]string{oidc.ScopeOpenID}, scopes...),
 	}
+	oidcConfig := &oidc.Config{
+		ClientID:       clientID,
+		SkipNonceCheck: true,
+	}
+	verifier := provider.Verifier(oidcConfig)
 
-	// Enforce aud and expiry check, as library is not doing it by default
-	audVerify := oidc.VerifyAudience(clientID)
-	expVerify := oidc.VerifyExpiry()
 	var acrVal oauth2.AuthCodeOption
 	if conf.GetStringValue("engine.twofactor.acr_values") != "" {
 		acrVal = oauth2.SetAuthURLParam("acr_values",
@@ -76,9 +79,8 @@ func newAuthenticator(
 
 	authneticator := &Authenticator{
 		provider:    provider,
+		verifier:    verifier,
 		ctx:         ctx,
-		audVerify:   audVerify,
-		expVerify:   expVerify,
 		cookieName:  "goidc",
 		signer:      NewSigner(conf.GetStringValue("engine.signkey")),
 		acr:         acrVal,
@@ -118,7 +120,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
-		_, err = a.provider.Verifier(a.audVerify, a.expVerify).Verify(a.ctx, oidcToken)
+		_, err = a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
 			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
 			return
