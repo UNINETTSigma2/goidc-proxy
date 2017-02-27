@@ -1,15 +1,17 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/uninett/goidc-proxy/conf"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/uninett/goidc-proxy/conf"
 )
 
 var version = "none"
@@ -41,14 +43,31 @@ func init() {
 }
 
 func listenHTTP(ssl bool, port int) {
+	srv := &http.Server{
+		ReadTimeout:  time.Duration(conf.GetIntValue("server.readtimeout")) * time.Second,
+		WriteTimeout: time.Duration(conf.GetIntValue("server.writetimeout")) * time.Second,
+		IdleTimeout:  time.Duration(conf.GetIntValue("server.idletimeout")) * time.Second,
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      nil,
+	}
 	if ssl {
-		log.Fatal(http.ListenAndServeTLS(
-			fmt.Sprintf(":%d", port),
+		// Taken from https://blog.gopheracademy.com/advent-2016/exposing-go-on-the-internet/
+		tlsConfig := &tls.Config{
+			// Causes servers to use Go's default ciphersuite preferences,
+			// which are tuned to avoid attacks. Does nothing on clients.
+			PreferServerCipherSuites: true,
+			// Only use curves which have assembly implementations
+			CurvePreferences: []tls.CurveID{
+				tls.CurveP256,
+				tls.X25519, // Go 1.8 only
+			},
+		}
+		srv.TLSConfig = tlsConfig
+		log.Fatal(srv.ListenAndServeTLS(
 			conf.GetStringValue("server.cert"),
-			conf.GetStringValue("server.key"),
-			nil))
+			conf.GetStringValue("server.key")))
 	} else {
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		log.Fatal(srv.ListenAndServe())
 	}
 }
 

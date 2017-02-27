@@ -26,6 +26,9 @@
 		"health_port": 1337,
 		"cert": "cert.pem",
 		"key": "key.pem",
+		"readtimeout": 10,
+		"writetimeout": 20,
+		"idletimeout": 120,
 		"ssl": false,
 		"secure_cookie": false
 	}
