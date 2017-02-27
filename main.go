@@ -99,6 +99,7 @@ func main() {
 		conf.GetStringValue("engine.issuer_url"))
 	if err != nil {
 		log.Fatal("Failed in getting authenticator", err)
+		os.Exit(1)
 	}
 
 	// Configure routes
