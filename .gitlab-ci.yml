@@ -1,0 +1,53 @@
+image: golang:1.8
+
+variables:
+  REPO_NAME: github.com/uninett/goidc-proxy
+
+before_script:
+  - go version
+  - echo $CI_BUILD_REF
+  - echo $CI_PROJECT_DIR
+  - curl https://glide.sh/get | sh
+  - mkdir -p $GOPATH/src/$REPO_NAME
+  - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
+  - cd $GOPATH/src/$REPO_NAME
+  - export OUR_VERSION=$(git describe --tags --dirty --always)
+  - echo "Setting version to $OUR_VERSION"
+
+stages:
+  - test
+  - build
+  - deploy
+
+test-project:
+  stage: test
+  script:
+    - glide install
+    - go get -v github.com/go-playground/overalls
+    - overalls -project=$REPO_NAME -ignore=.git,.glide,vendor -debug -- -race -v
+    - go tool cover -func=overalls.coverprofile
+
+build-project:
+  stage: build
+  script:
+    - glide install
+    - go build
+  artifacts:
+    paths:
+      - goidc-proxy
+
+deploy-testing:
+  variables:
+    SSH_OPTIONS: "-o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key"
+  stage: deploy
+  script:
+    - echo "$DEPLOY_KEY" > ssh-private-key
+    - chmod 0600 ssh-private-key
+    - echo "$TESTING_HOSTKEY" > ssh-known-hosts
+    - ssh $SSH_OPTIONS goidc-deploy@$TESTING_HOST /bin/mkdir -p /opt/goidc-proxy-deploys/$OUR_VERSION
+    - scp $SSH_OPTIONS goidc-proxy goidc-deploy@$TESTING_HOST:/opt/goidc-proxy-deploys/$OUR_VERSION/
+    - rm ssh-private-key ssh-known-hosts
+  environment:
+    name: testing
+  only:
+    - master
