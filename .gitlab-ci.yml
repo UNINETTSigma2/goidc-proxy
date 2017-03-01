@@ -10,7 +10,7 @@ before_script:
   - mkdir -p $GOPATH/src/$REPO_NAME
   - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
   - cd $GOPATH/src/$REPO_NAME
-  - export OUR_VERSION=${CI_BUILD_TAG:-$CI_BUILD_REF}
+  - export OUR_VERSION=${CI_BUILD_TAG:-$CI_BUILD_REF_NAME}
   - echo "Setting version to $OUR_VERSION"
 
 stages:
@@ -38,12 +38,16 @@ build-project:
 
 deploy-testing:
   stage: deploy
+  variables:
+    DEPLOY_HOST: "goidc-deploy@$TESTING_HOST"
+    DEPLOY_DIR: "/opt/goidc-proxy-deploys/$OUR_VERSION/"
+    SSH_OPTIONS: "-o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key"
   script:
     - echo "$DEPLOY_KEY" > ssh-private-key
     - chmod 0600 ssh-private-key
     - echo "$TESTING_HOSTKEY" > ssh-known-hosts
-    - ssh -o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key goidc-deploy@$TESTING_HOST /bin/mkdir -p /opt/goidc-proxy-deploys/$OUR_VERSION
-    - scp -o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key goidc-proxy goidc-deploy@$TESTING_HOST:/opt/goidc-proxy-deploys/$OUR_VERSION/
+    - ssh $SSH_OPTIONS $DEPLOY_HOST /bin/mkdir -p $DEPLOY_DIR
+    - scp $SSH_OPTIONS goidc-proxy $DEPLOY_HOST:$DEPLOY_DIR
     - rm ssh-private-key ssh-known-hosts
   environment:
     name: testing
