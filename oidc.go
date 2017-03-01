@@ -162,6 +162,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			cToken = token.AccessToken
 		}
 		// Setup the cookie which will be used by client to authn later
+		// TODO check if we should JWT token expiry time or Accesstoken expiry time
 		cValue := cToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
 		http.SetCookie(w, &http.Cookie{
 			Name:     a.cookieName,
