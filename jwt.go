@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/parnurzeal/gorequest"
 )
@@ -16,13 +19,13 @@ func getJWTToken(accessToken string, url string) (string, error) {
 		EndStruct(&jwt)
 
 	if errs != nil {
-		log.Warn("Failed in fetching JWT Token", err)
-		return nil, error.New("Failed in getting JWT Token ", errs[0])
+		log.Warn("Failed in fetching JWT Token", errs[0].Error())
+		return "", errors.New("Failed in getting JWT Token " + errs[0].Error())
 	}
 
 	if resp != nil && resp.StatusCode != 201 {
-		log.Warn("Failed in fetching JWT Token", err)
-		return nil, error.New("Failed in getting JWT Token code: ", resp.StatusCode)
+		log.Warn("Failed in fetching JWT Token", errs[0].Error())
+		return "", errors.New("Failed in getting JWT Token code: " + strconv.Itoa(resp.StatusCode))
 	}
 
 	return jwt.Token, nil
