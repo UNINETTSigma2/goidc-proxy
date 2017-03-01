@@ -20,6 +20,7 @@ In addition to that it has support for two factor authentication which is primar
         "signkey": "testtesttesttest",
         "groups_endpoint": "",
         "token_type": "oauth2",
+        "jwt_token_issuer": "https://jwt.example.no",
         "twofactor": {
             "all": false,
             "redirect_on_response": false,
@@ -61,6 +62,7 @@ The configuration file for using Google as [OpenID provider](https://developers.
         "signkey": "testtesttesttest",
         "groups_endpoint": "",
         "token_type": "oauth2",
+        "jwt_token_issuer": "https://jwt.example.no",
         "twofactor": {
             "all": false,
             "redirect_on_response": false,
