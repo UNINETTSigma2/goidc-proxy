@@ -5,13 +5,12 @@ variables:
 
 before_script:
   - go version
-  - echo $CI_BUILD_REF
   - echo $CI_PROJECT_DIR
   - curl https://glide.sh/get | sh
   - mkdir -p $GOPATH/src/$REPO_NAME
   - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
   - cd $GOPATH/src/$REPO_NAME
-  - export OUR_VERSION=$(git describe --tags --dirty --always)
+  - export OUR_VERSION=${CI_BUILD_TAG:-$CI_BUILD_REF}
   - echo "Setting version to $OUR_VERSION"
 
 stages:
