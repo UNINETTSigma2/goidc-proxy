@@ -31,7 +31,7 @@ build-project:
   stage: build
   script:
     - glide install
-    - go build
+    - go build -o goidc-proxy
   artifacts:
     paths:
       - goidc-proxy
