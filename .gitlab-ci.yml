@@ -37,15 +37,13 @@ build-project:
       - goidc-proxy
 
 deploy-testing:
-  variables:
-    SSH_OPTIONS: "-o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key"
   stage: deploy
   script:
     - echo "$DEPLOY_KEY" > ssh-private-key
     - chmod 0600 ssh-private-key
     - echo "$TESTING_HOSTKEY" > ssh-known-hosts
-    - ssh $SSH_OPTIONS goidc-deploy@$TESTING_HOST /bin/mkdir -p /opt/goidc-proxy-deploys/$OUR_VERSION
-    - scp $SSH_OPTIONS goidc-proxy goidc-deploy@$TESTING_HOST:/opt/goidc-proxy-deploys/$OUR_VERSION/
+    - ssh -o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key goidc-deploy@$TESTING_HOST /bin/mkdir -p /opt/goidc-proxy-deploys/$OUR_VERSION
+    - scp -o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key goidc-proxy goidc-deploy@$TESTING_HOST:/opt/goidc-proxy-deploys/$OUR_VERSION/
     - rm ssh-private-key ssh-known-hosts
   environment:
     name: testing
