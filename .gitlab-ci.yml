@@ -12,6 +12,9 @@ before_script:
   - cd $GOPATH/src/$REPO_NAME
   - export OUR_VERSION=${CI_BUILD_TAG:-$CI_BUILD_REF_NAME}
   - echo "Setting version to $OUR_VERSION"
+  - export DEPLOY_DIR="/opt/goidc-proxy-deploys/$OUR_VERSION/"
+  - echo "Setting deploy dir to $DEPLOY_DIR"
+
 
 stages:
   - test
@@ -40,7 +43,6 @@ deploy-testing:
   stage: deploy
   variables:
     DEPLOY_HOST: "goidc-deploy@$TESTING_HOST"
-    DEPLOY_DIR: "/opt/goidc-proxy-deploys/$OUR_VERSION/"
     SSH_OPTIONS: "-o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key"
   script:
     - echo "$DEPLOY_KEY" > ssh-private-key
