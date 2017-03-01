@@ -153,7 +153,11 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		// Check if downstream application wants JWT or OAuth2 token
 		var cToken string
 		if conf.GetStringValue("engine.token_type") == "jwt" {
-			cToken = oidcToken
+			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
+			if err != nil {
+				http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 		} else {
 			cToken = token.AccessToken
 		}
