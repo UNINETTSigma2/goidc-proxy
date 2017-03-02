@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
@@ -127,6 +126,28 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
+		var groups []string
+		if conf.GetStringValue("engine.groups_endpoint") != "" {
+			groups, _ = getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
+		}
+
+		// Check if this given principals are allowed to access resource
+		if conf.GetStringValue("engine.authorized_principals") != "" {
+			authzPrinipals := strings.Split(conf.GetStringValue("engine.authorized_principals"), ",")
+			authorized := false
+			for _, grp := range groups {
+				for _, p := range authzPrinipals {
+					if p == grp {
+						authorized = true
+					}
+				}
+			}
+			if !authorized {
+				http.Error(w, "Not authorized to access resource", http.StatusForbidden)
+				return
+			}
+		}
+
 		// Get user info and see if user/affiliations are in the list of twofactor_principals
 		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
@@ -137,7 +158,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 			// Check if we are have redirected already then create cookie directly
 			if getEntry(a.redirectMap, userInfo.Subject) == 0 {
-				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo)
+				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo, groups)
 				if err != nil {
 					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
 					return
@@ -250,11 +271,12 @@ func (a *Authenticator) checkTokenValidity(data string) (string, bool) {
 	return cData[0], true
 }
 
-func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo) (bool, error) {
+func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo, groups []string) (bool, error) {
 	var userPrincipals []string
 	var userIdSec UserIDSec
 
 	userPrincipals = append(userPrincipals, userInfo.Subject)
+	userPrincipals = append(userPrincipals, groups...)
 	err := userInfo.Claims(&userIdSec)
 	if err != nil {
 		log.Warn("Failed in getting Feide ID", err)
@@ -262,15 +284,6 @@ func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo
 	}
 	if len(userIdSec.ID) > 0 {
 		userPrincipals = append(userPrincipals, userIdSec.ID...)
-	}
-
-	if conf.GetStringValue("engine.groups_endpoint") != "" {
-		groups, err := getGroups(token, conf.GetStringValue("engine.groups_endpoint"))
-		if err != nil {
-			log.Warn("Failed to getting User groups", err)
-			return false, errors.New("Failed to getting User groups")
-		}
-		userPrincipals = append(userPrincipals, groups...)
 	}
 
 	for _, p := range userPrincipals {
