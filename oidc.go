@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SermoDigital/jose/jws"
 	"github.com/m4rw3r/uuid"
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
@@ -152,22 +153,30 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		// Check if downstream application wants JWT or OAuth2 token
 		var cToken string
+		var maxAge int
 		if conf.GetStringValue("engine.token_type") == "jwt" {
 			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
 			if err != nil {
 				http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
+			parseJWT, err := jws.ParseJWT([]byte(cToken))
+			if err != nil {
+				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			maxAge = int(parseJWT.Claims().Get("exp").(float64) - parseJWT.Claims().Get("iat").(float64))
 		} else {
 			cToken = token.AccessToken
+			maxAge = int(token.Expiry.Unix() - time.Now().Unix())
 		}
+
 		// Setup the cookie which will be used by client to authn later
-		// TODO check if we should JWT token expiry time or Accesstoken expiry time
 		cValue := cToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
 		http.SetCookie(w, &http.Cookie{
 			Name:     a.cookieName,
 			Value:    a.signer.getSignedData(cValue),
-			MaxAge:   int(token.Expiry.Unix() - time.Now().Unix()),
+			MaxAge:   maxAge,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.secure_cookie"),

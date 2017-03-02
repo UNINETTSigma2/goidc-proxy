@@ -7,3 +7,4 @@ import:
 - package: golang.org/x/oauth2
 - package: github.com/m4rw3r/uuid
 - package: github.com/parnurzeal/gorequest
+- package: github.com/SermoDigital/jose/jws

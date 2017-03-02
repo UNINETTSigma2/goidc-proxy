@@ -19,7 +19,7 @@ var startTime time.Time
 
 func init() {
 	// Log as JSON to stderr
-	log.SetFormatter(&log.JSONFormatter{"2006-01-02T15:04:05.000Z07:00"})
+	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stderr)
 
 	// Find config file
