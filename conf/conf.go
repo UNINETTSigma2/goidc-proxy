@@ -7,7 +7,7 @@ import (
 
 func ReadConfig(filename string) error {
 
-	viper.SetConfigName(filename)
+	viper.SetConfigFile(filename)
 	viper.AddConfigPath(".")
 	err := viper.ReadInConfig()
 	if err != nil {

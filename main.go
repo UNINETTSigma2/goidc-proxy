@@ -22,8 +22,19 @@ func init() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stderr)
 
+	// Set up a version option, until we get a /healthz endpoint or
+	// something similar
+	showVersion := flag.Bool("version", false, "Prints version information and exits")
+	configFile := flag.String("c", "goidc.json", "Use the specified `configfile`")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("goidc-proxy version", version)
+		os.Exit(0)
+	}
+
 	// Find config file
-	err := conf.ReadConfig("goidc")
+	err := conf.ReadConfig(*configFile)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"detail": err,
@@ -72,16 +83,6 @@ func listenHTTP(ssl bool, port int) {
 }
 
 func main() {
-
-	// Set up a version option, until we get a /healthz endpoint or
-	// something similar
-	showVersion := flag.Bool("version", false, "Prints version information and exits")
-	flag.Parse()
-	if *showVersion {
-		fmt.Println("goidc-proxy version", version)
-		os.Exit(0)
-	}
-
 	// Get target/backend URL
 	targetURL, err := url.Parse(conf.GetStringValue("proxy.target"))
 	if err != nil {
