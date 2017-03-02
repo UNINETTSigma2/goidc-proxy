@@ -8,3 +8,4 @@ import:
 - package: github.com/m4rw3r/uuid
 - package: github.com/parnurzeal/gorequest
 - package: github.com/SermoDigital/jose/jws
+- package: github.com/gorilla/websocket

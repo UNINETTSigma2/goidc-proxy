@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// Create proxy and middleware
-	target := NewReverseProxy(targetURL)
+	upstream := NewUpstreamProxy(targetURL)
 	authn, err := newAuthenticator(
 		conf.GetStringValue("engine.client_id"),
 		conf.GetStringValue("engine.client_secret"),
@@ -106,7 +106,7 @@ func main() {
 	// Configure routes
 	http.Handle("/healthz", healthzHandler(targetURL.String()))
 	http.Handle("/oauth2/callback", authn.callbackHandler())
-	http.Handle("/", authn.authHandler(target))
+	http.Handle("/", authn.authHandler(upstream))
 
 	// Start proxying
 	log.Println("Proxy initialized and listening on port", conf.GetIntValue("server.port"))

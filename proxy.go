@@ -3,9 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	log "github.com/Sirupsen/logrus"
-	"github.com/uninett/goidc-proxy/conf"
-	"golang.org/x/oauth2"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -13,6 +10,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/uninett/goidc-proxy/conf"
+	"golang.org/x/oauth2"
 )
 
 type transport struct {
@@ -21,6 +22,11 @@ type transport struct {
 
 type ACRValues struct {
 	Values string `json:"required_acr_values"`
+}
+
+type UpstreamProxy struct {
+	upstream *url.URL
+	handler  http.Handler
 }
 
 func singleJoiningSlash(a, b string) string {
@@ -74,8 +80,21 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	return resp, nil
 }
 
+func NewUpstreamProxy(target *url.URL) *UpstreamProxy {
+	proxy := newReverseProxy(target)
+	return &UpstreamProxy{target, proxy}
+}
+
+func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isWebsocketRequest(r) {
+		u.handleWebsocket(w, r)
+	} else {
+		u.handler.ServeHTTP(w, r)
+	}
+}
+
 // NewReverseProxy prvoides reverse proxy functionality towards target
-func NewReverseProxy(target *url.URL) *httputil.ReverseProxy {
+func newReverseProxy(target *url.URL) *httputil.ReverseProxy {
 	director := func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
