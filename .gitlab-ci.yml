@@ -55,3 +55,22 @@ deploy-testing:
     name: testing
   only:
     - master
+
+deploy-prod:
+  stage: deploy
+  variables:
+    SSH_OPTIONS: "-o GlobalKnownHostsFile=ssh-known-hosts -i ssh-private-key"
+  script:
+    - echo "$DEPLOY_KEY" > ssh-private-key
+    - chmod 0600 ssh-private-key
+    - echo "$PROD_HOST_A_HOSTKEY" > ssh-known-hosts
+    - ssh $SSH_OPTIONS goidc-deploy@$PROD_HOST_A /bin/mkdir -p $DEPLOY_DIR
+    - scp $SSH_OPTIONS goidc-proxy goidc-deploy@$PROD_HOST_A:$DEPLOY_DIR
+    - echo "$PROD_HOST_B_HOSTKEY" > ssh-known-hosts
+    - ssh $SSH_OPTIONS goidc-deploy@$PROD_HOST_B /bin/mkdir -p $DEPLOY_DIR
+    - scp $SSH_OPTIONS goidc-proxy goidc-deploy@$PROD_HOST_B:$DEPLOY_DIR
+    - rm ssh-private-key ssh-known-hosts
+  environment:
+    name: production
+  only:
+    - tags
