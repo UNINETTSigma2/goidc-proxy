@@ -110,7 +110,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
-			log.Warn("no token found: %v", err)
+			log.Warn("No token found: %v", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -122,6 +122,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		_, err = a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
+			log.Info("Failed to verify OpenID Token ", err.Error())
 			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -236,6 +237,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 
 		recToken, valid := a.checkTokenValidity(c.Value)
 		if !valid {
+			log.Info("Got invalid token, rediecting for authnetication")
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
