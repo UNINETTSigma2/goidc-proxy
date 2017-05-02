@@ -49,8 +49,12 @@ deploy-testing:
     - chmod 0600 ssh-private-key
     - echo "$TESTING_HOSTKEY" > ssh-known-hosts
     - ssh $SSH_OPTIONS $DEPLOY_HOST /bin/mkdir -p $DEPLOY_DIR
+    - service k3proxy stop
+    - service k4proxy stop
     - scp $SSH_OPTIONS goidc-proxy $DEPLOY_HOST:$DEPLOY_DIR
     - rm ssh-private-key ssh-known-hosts
+    - service k3proxy start
+    - service k4proxy start
   environment:
     name: testing
   only:
