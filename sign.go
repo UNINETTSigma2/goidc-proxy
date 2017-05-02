@@ -4,21 +4,19 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+
 	log "github.com/Sirupsen/logrus"
-	"hash"
 )
 
 const SEP = "||"
 
 type Signer struct {
-	mac hash.Hash
 	key []byte
 }
 
 func NewSigner(key string) *Signer {
 	s := new(Signer)
 	s.key = []byte(key)
-	s.mac = hmac.New(sha256.New, s.key)
 	return s
 }
 
@@ -27,13 +25,13 @@ func encodeToString(data []byte) string {
 }
 
 func (s *Signer) getHMAC(data string) []byte {
-	s.mac.Reset() // Reset to initial state
+	mac := hmac.New(sha256.New, s.key)
 	pdata := []byte(data)
-	if _, err := s.mac.Write(pdata); err != nil {
+	if _, err := mac.Write(pdata); err != nil {
 		log.Warn("Failed in getting HMAC", err)
 		return nil
 	}
-	return s.mac.Sum(nil)
+	return mac.Sum(nil)
 }
 
 func (s *Signer) getSignedData(data string) string {
