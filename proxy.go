@@ -73,6 +73,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 			resp.Body = ioutil.NopCloser(bytes.NewReader([]byte("{}")))
 			resp.StatusCode = http.StatusFound
 			resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
+			log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
 			return resp, nil
 		}
 		resp.Body = ioutil.NopCloser(bytes.NewReader(b))
