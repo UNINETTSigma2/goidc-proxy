@@ -218,7 +218,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			http.SetCookie(w, &http.Cookie{
 				Name:     "state." + uid.String(),
 				Value:    a.signer.getSignedData(r.URL.String()),
-				MaxAge:   1800,
+				MaxAge:   28800,
 				Path:     "/",
 				HttpOnly: true,
 				Secure:   conf.GetBoolValue("server.secure_cookie"),
