@@ -47,7 +47,8 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusForbidden &&
-		conf.GetBoolValue("engine.twofactor.rediect_on_response") {
+		conf.GetBoolValue("engine.twofactor.rediect_on_response") &&
+		!isXHR(req.URL.Path) {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Warn("Failed in reading response body ", err)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -53,4 +54,13 @@ func expireEnteries(dataMap TTLMap) bool {
 		}
 		dataMap.Unlock()
 	}
+}
+
+func isXHR(path string) bool {
+	for _, xhrEP := range xhrEndpoints {
+		if strings.HasPrefix(path, xhrEP) {
+			return true
+		}
+	}
+	return false
 }

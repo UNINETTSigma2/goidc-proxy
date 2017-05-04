@@ -225,6 +225,13 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				Secure:   conf.GetBoolValue("server.secure_cookie"),
 			})
 			log.Debug("Path is: ", r.URL.String())
+
+			// Check if it is a XHR request, then send 401. As browser will not handle
+			// redirect in this. Application has to handle the error by itself
+			if isXHR(r.URL.Path) {
+				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
+			}
+
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
@@ -241,6 +248,11 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
+			}
+			// Check if it is a XHR request, then send 401. As browser will not handle
+			// redirect in this. Application has to handle the error by itself
+			if isXHR(r.URL.Path) {
+				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 			// Token is not valid, so redirecting to authenticate again
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {

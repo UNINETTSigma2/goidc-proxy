@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -16,6 +17,7 @@ import (
 
 var version = "none"
 var startTime time.Time
+var xhrEndpoints []string
 
 func init() {
 	// Log as JSON to stderr
@@ -107,6 +109,12 @@ func main() {
 	http.Handle("/healthz", healthzHandler(targetURL.String()))
 	http.Handle("/oauth2/callback", authn.callbackHandler())
 	http.Handle("/", authn.authHandler(upstream))
+
+	// Get XHR Endpoints where we don't need to redirect
+	// Let application handles the error itself
+	if conf.GetStringValue("engine.xhr_endpoints") != "" {
+		xhrEndpoints = strings.Split(conf.GetStringValue("engine.xhr_endpoints"), ",")
+	}
 
 	// Start proxying
 	log.Println("Proxy initialized and listening on port", conf.GetIntValue("server.port"))

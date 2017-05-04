@@ -12,6 +12,7 @@
 		"groups_endpoint": "https://groups-api.dataporten.no/groups/me/groups",
 		"token_type": "oauth2",
 		"jwt_token_issuer": "https://jwt.example.no",
+		"xhr_endpoints": "",
 		"authorized_principals": "",
 		"twofactor": {
 			"all": false,
