@@ -64,3 +64,25 @@ func isXHR(path string) bool {
 	}
 	return false
 }
+
+func getRedirectJS(cookieName string, url string) []byte {
+	return []byte(`
+		<script>
+			var href = window.location.href;
+			var hrefLen = href.length;
+			var protoLen = window.location.protocol.length + 2; // for two slashes
+			var hostLen = window.location.hostname.length;
+			var cookieValue = href.substring(protoLen+hostLen, hrefLen);
+			if (cookieValue.startsWith(":")) {
+				var cValLen = cookieValue.length;
+				cookieValue = cookieValue.substring(cookieValue.indexOf("/"), cValLen)
+			}
+			var date = new Date();
+			date.setTime(date.getTime()+(28800*1000));
+			var expires = "; expires="+date.toString();
+			var cookieName = "` + cookieName + `";
+			document.cookie = cookieName+"="+cookieValue+expires+"; path=/";
+			window.location = "` + url + `";
+		</script>
+	`)
+}

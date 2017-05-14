@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -50,10 +51,12 @@ func TestAuthHandlerRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
 
-	loc := w.Header().Get("Location")
-	assert.True(strings.HasPrefix(loc, dummyConfig.Endpoint.AuthURL+"?client_id="+dummyConfig.ClientID), "Redirect to correct URL")
+	locBytes, err := ioutil.ReadAll(w.Body)
+	assert.Nil(err)
+	loc := string(locBytes[:len(locBytes)])
+	assert.True(strings.Contains(loc, dummyConfig.Endpoint.AuthURL+"?client_id="+dummyConfig.ClientID), "Redirect to correct URL")
 }
 
 func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
@@ -72,7 +75,7 @@ func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
 }
 
 func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
@@ -92,7 +95,7 @@ func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
 }
 
 func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
@@ -113,7 +116,7 @@ func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusFound, w.Code, "authHandler should return 302 Found")
+	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
 }
 
 func TestAuthHandlerCookie(t *testing.T) {

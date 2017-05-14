@@ -102,11 +102,6 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
-		cData := strings.Split(c.Value, SEP)
-		if len(cData) != 2 || !a.signer.checkSig(cData[0], cData[1]) {
-			http.Error(w, "Path signature does not match", http.StatusBadRequest)
-			return
-		}
 
 		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
@@ -167,7 +162,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				if rediect {
 					log.Debug("Redirecting for Two factor auth with UserID ", userInfo.Subject)
 					addEntry(a.redirectMap, userInfo.Subject, time.Now().Unix())
-					http.Redirect(w, r, oauthConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr), http.StatusFound)
+					w.Write(getRedirectJS(c.Name, oauthConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
 					return
 				}
 			}
@@ -203,7 +198,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.secure_cookie"),
 		})
-		http.Redirect(w, r, strings.Split(c.Value, SEP)[0], http.StatusFound)
+		http.Redirect(w, r, c.Value, http.StatusFound)
 	})
 }
 
@@ -211,33 +206,23 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(a.cookieName)
 		if err != nil {
-			uid, err := uuid.V4()
-			if err != nil {
-				log.Warn("Failed in getting UUID", err)
-			}
-			// Setup the cookie which will be used to get the rediect path after authn
-			http.SetCookie(w, &http.Cookie{
-				Name:     "state." + uid.String(),
-				Value:    a.signer.getSignedData(r.URL.String()),
-				MaxAge:   28800,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   conf.GetBoolValue("server.secure_cookie"),
-			})
-			log.Debug("Path is: ", r.URL.String())
-
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 
+			uid, err := uuid.V4()
+			if err != nil {
+				log.Warn("Failed in getting UUID", err)
+			}
+
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
-				http.Redirect(w, r, oauthConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
+				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				http.Redirect(w, r, oauthConfig.AuthCodeURL(uid.String()), http.StatusFound)
+				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
@@ -256,9 +241,9 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			}
 			// Token is not valid, so redirecting to authenticate again
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
-				http.Redirect(w, r, oauthConfig.AuthCodeURL(uid.String(), a.acr), http.StatusFound)
+				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				http.Redirect(w, r, oauthConfig.AuthCodeURL(uid.String()), http.StatusFound)
+				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
