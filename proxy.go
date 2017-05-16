@@ -52,25 +52,28 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		conf.GetBoolValue("engine.twofactor.rediect_on_response") {
 		// Check that the server actually sent compressed data
 		var reader io.ReadCloser
-		defer resp.Body.Close()
 		switch resp.Header.Get("Content-Encoding") {
 		case "gzip":
+			// Remove header, as we will send reply as simple json
+			resp.Header.Del("Content-Encoding")
 			reader, err = gzip.NewReader(resp.Body)
 		default:
 			reader = resp.Body
 		}
-		defer reader.Close()
+		defer resp.Body.Close()
 		b, err := ioutil.ReadAll(reader)
 		if err != nil {
 			log.Warn("Failed in reading response body ", err)
 			return resp, err
 		}
+		defer reader.Close()
 		var acr ACRValues
 		err = json.Unmarshal(b, &acr)
 		if err != nil {
 			log.Warn("Failed in parsing response body ", err)
 		}
 		if acr.Values != "" {
+			log.Info("Endpoint require two factor authentication")
 			var state string
 			for _, c := range req.Cookies() {
 				if strings.HasPrefix(c.Name, "state.") {
