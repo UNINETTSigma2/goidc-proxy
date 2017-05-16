@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -48,14 +50,22 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	}
 	if resp.StatusCode == http.StatusForbidden &&
 		conf.GetBoolValue("engine.twofactor.rediect_on_response") {
-		b, err := ioutil.ReadAll(resp.Body)
+		// Check that the server actually sent compressed data
+		var reader io.ReadCloser
+		defer resp.Body.Close()
+		isGzipped := false
+		switch resp.Header.Get("Content-Encoding") {
+		case "gzip":
+			reader, err = gzip.NewReader(resp.Body)
+			isGzipped = true
+		default:
+			reader = resp.Body
+		}
+		defer reader.Close()
+		b, err := ioutil.ReadAll(reader)
 		if err != nil {
 			log.Warn("Failed in reading response body ", err)
 			return resp, err
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			log.Warn("Failed in closing response body ", err)
 		}
 		var acr ACRValues
 		err = json.Unmarshal(b, &acr)
@@ -70,14 +80,24 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 				}
 			}
 			acrVal := oauth2.SetAuthURLParam("acr_values", acr.Values)
+			var bodyData []byte
 			if isXHR(req.URL.Path) {
-				bodyData := []byte(`{"two_factor": true, "redirect_url": ` + oauthConfig.AuthCodeURL(state, acrVal) + `}`)
-				resp.Body = ioutil.NopCloser(bytes.NewReader(append(bodyData, b...)))
+				bodyData = append([]byte(`{"two_factor": true, "redirect_url": `+oauthConfig.AuthCodeURL(state, acrVal)+`}`), b...)
 				log.Info("Got 403 with non empty ACR Values, redirecting for XHR ", acrVal)
 			} else {
 				resp.StatusCode = http.StatusFound
+				bodyData = []byte("{}")
 				resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
 				log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
+			}
+			if isGzipped {
+				var buf bytes.Buffer
+				gz := gzip.NewWriter(&buf)
+				defer gz.Close()
+				gz.Write(bodyData)
+				resp.Body = ioutil.NopCloser(&buf)
+			} else {
+				resp.Body = ioutil.NopCloser(bytes.NewReader(bodyData))
 			}
 			return resp, nil
 		}
