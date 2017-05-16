@@ -53,11 +53,9 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		// Check that the server actually sent compressed data
 		var reader io.ReadCloser
 		defer resp.Body.Close()
-		isGzipped := false
 		switch resp.Header.Get("Content-Encoding") {
 		case "gzip":
 			reader, err = gzip.NewReader(resp.Body)
-			isGzipped = true
 		default:
 			reader = resp.Body
 		}
@@ -90,15 +88,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 				resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
 				log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
 			}
-			if isGzipped {
-				var buf bytes.Buffer
-				gz := gzip.NewWriter(&buf)
-				defer gz.Close()
-				gz.Write(bodyData)
-				resp.Body = ioutil.NopCloser(&buf)
-			} else {
-				resp.Body = ioutil.NopCloser(bytes.NewReader(bodyData))
-			}
+			resp.Body = ioutil.NopCloser(bytes.NewReader(bodyData))
 			return resp, nil
 		}
 		resp.Body = ioutil.NopCloser(bytes.NewReader(b))
