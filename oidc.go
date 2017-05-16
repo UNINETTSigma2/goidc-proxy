@@ -7,6 +7,7 @@ import (
 	oidc "github.com/coreos/go-oidc"
 	//"github.com/davecgh/go-spew/spew"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -198,7 +199,12 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.secure_cookie"),
 		})
-		http.Redirect(w, r, c.Value, http.StatusFound)
+		unescapedStateCookie, err := url.PathUnescape(c.Value)
+		if err != nil {
+			log.Warn("Failed unescaping state cookie, setting to / ", err);
+			unescapedStateCookie = "/"
+		}
+		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
 	})
 }
 

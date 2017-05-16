@@ -81,7 +81,7 @@ func getRedirectJS(cookieName string, url string) []byte {
 			date.setTime(date.getTime()+(28800*1000));
 			var expires = "; expires="+date.toString();
 			var cookieName = "` + cookieName + `";
-			document.cookie = cookieName+"="+cookieValue+expires+"; path=/";
+			document.cookie = cookieName+"="+encodeURIComponent(cookieValue)+expires+"; path=/";
 			window.location = "` + url + `";
 		</script>
 	`)
