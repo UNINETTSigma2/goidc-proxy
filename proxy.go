@@ -83,7 +83,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 			acrVal := oauth2.SetAuthURLParam("acr_values", acr.Values)
 			var bodyData []byte
 			if isXHR(req.URL.Path) {
-				bodyData = append([]byte(`{"two_factor": true, "redirect_url": `+oauthConfig.AuthCodeURL(state, acrVal)+`}`), b...)
+				bodyData = append(append([]byte(`{"two_factor": true, "redirect_url": "`+oauthConfig.AuthCodeURL(state, acrVal)+`", "body":`), b...), []byte("}")...)
 				log.Info("Got 403 with non empty ACR Values, redirecting for XHR ", acrVal)
 			} else {
 				resp.StatusCode = http.StatusFound
