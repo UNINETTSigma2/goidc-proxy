@@ -47,8 +47,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusForbidden &&
-		conf.GetBoolValue("engine.twofactor.rediect_on_response") &&
-		!isXHR(req.URL.Path) {
+		conf.GetBoolValue("engine.twofactor.rediect_on_response") {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Warn("Failed in reading response body ", err)
@@ -71,10 +70,15 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 				}
 			}
 			acrVal := oauth2.SetAuthURLParam("acr_values", acr.Values)
-			resp.Body = ioutil.NopCloser(bytes.NewReader([]byte("{}")))
-			resp.StatusCode = http.StatusFound
-			resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
-			log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
+			if isXHR(req.URL.Path) {
+				bodyData := []byte(`{"two_factor": true, "redirect_url": ` + oauthConfig.AuthCodeURL(state, acrVal) + `}`)
+				resp.Body = ioutil.NopCloser(bytes.NewReader(append(bodyData, b...)))
+				log.Info("Got 403 with non empty ACR Values, redirecting for XHR ", acrVal)
+			} else {
+				resp.StatusCode = http.StatusFound
+				resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
+				log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
+			}
 			return resp, nil
 		}
 		resp.Body = ioutil.NopCloser(bytes.NewReader(b))
