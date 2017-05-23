@@ -4,12 +4,6 @@ variables:
   REPO_NAME: github.com/uninett/goidc-proxy
 
 before_script:
-  - go version
-  - echo $CI_PROJECT_DIR
-  - curl https://glide.sh/get | sh
-  - mkdir -p $GOPATH/src/$REPO_NAME
-  - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
-  - cd $GOPATH/src/$REPO_NAME
   - export OUR_VERSION=${CI_BUILD_TAG:-$CI_BUILD_REF_NAME}
   - echo "Setting version to $OUR_VERSION"
   - export DEPLOY_DIR="/opt/goidc-proxy-deploys/$OUR_VERSION/"
@@ -24,6 +18,12 @@ stages:
 test-project:
   stage: test
   script:
+    - go version
+    - echo $CI_PROJECT_DIR
+    - curl https://glide.sh/get | sh
+    - mkdir -p $GOPATH/src/$REPO_NAME
+    - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
+    - cd $GOPATH/src/$REPO_NAME
     - cp goidc.json.example goidc.json
     - glide install
     - go get -v github.com/go-playground/overalls
@@ -33,6 +33,12 @@ test-project:
 build-project:
   stage: build
   script:
+    - go version
+    - echo $CI_PROJECT_DIR
+    - curl https://glide.sh/get | sh
+    - mkdir -p $GOPATH/src/$REPO_NAME
+    - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
+    - cd $GOPATH/src/$REPO_NAME
     - glide install
     - go build -o $CI_PROJECT_DIR/goidc-proxy
   artifacts:
