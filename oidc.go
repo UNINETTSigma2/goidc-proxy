@@ -172,6 +172,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		// Check if downstream application wants JWT or OAuth2 token
 		var cToken string
 		var maxAge int
+		var expiry int64
 		if conf.GetStringValue("engine.token_type") == "jwt" {
 			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
 			if err != nil {
@@ -183,14 +184,16 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			maxAge = int(parseJWT.Claims().Get("exp").(float64) - parseJWT.Claims().Get("iat").(float64))
+			maxAge = int(parseJWT.Claims().Get("exp").(float64) - float64(time.Now().Unix()))
+			expiry = int64(parseJWT.Claims().Get("exp").(float64))
 		} else {
 			cToken = token.AccessToken
 			maxAge = int(token.Expiry.Unix() - time.Now().Unix())
+			expiry = int64(token.Expiry.Unix())
 		}
 
 		// Setup the cookie which will be used by client to authn later
-		cValue := cToken + SEP + strconv.FormatInt(token.Expiry.Unix(), 10)
+		cValue := cToken + SEP + strconv.FormatInt(expiry, 10)
 		http.SetCookie(w, &http.Cookie{
 			Name:     a.cookieName,
 			Value:    a.signer.getSignedData(cValue),
