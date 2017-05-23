@@ -183,7 +183,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			maxAge = int(parseJWT.Claims().Get("exp").(float64) - parseJWT.Claims().Get("iat").(float64))
+			maxAge = int(parseJWT.Claims().Get("exp").(float64) - float64(time.Now().Unix()))
 		} else {
 			cToken = token.AccessToken
 			maxAge = int(token.Expiry.Unix() - time.Now().Unix())
