@@ -85,8 +85,8 @@ docker-latest:
   stage: deploy
   image: registry.uninett.no/system/docker-builder:1.13.1-uninett7
   script:
-    - docker build -t "registry.uninett.no/$CI_PROJECT_PATH:latest" .
-    - docker push "registry.uninett.no/$CI_PROJECT_PATH:latest"
+    - docker build -t "registry.uninett.no/public/goidc-proxy:latest" .
+    - docker push "registry.uninett.no/public/goidc-proxy:latest"
   only:
     - master
 
@@ -94,7 +94,7 @@ docker-stable:
   stage: deploy
   image: registry.uninett.no/system/docker-builder:1.13.1-uninett7
   script:
-    - docker build -t "registry.uninett.no/$CI_PROJECT_PATH:$CI_BUILD_REF_NAME" .
-    - docker push "registry.uninett.no/$CI_PROJECT_PATH:$CI_BUILD_REF_NAME"
+    - docker build -t "registry.uninett.no/public/goidc-proxy:$CI_BUILD_REF_NAME" .
+    - docker push "registry.uninett.no/public/goidc-proxy:$CI_BUILD_REF_NAME"
   only:
     - tags
