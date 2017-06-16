@@ -65,7 +65,7 @@ func (u *UpstreamProxy) handleWebsocket(w http.ResponseWriter, r *http.Request) 
 	}
 	client, err := upgrader.Upgrade(w, r, upgradeHeader)
 	if err != nil {
-		log.Printf("couldn't upgrade websocket request: %v", err)
+		log.Warn("couldn't upgrade websocket request: %v", err)
 		http.Error(w, "websocket upgrade failed", http.StatusServiceUnavailable)
 		return
 	}

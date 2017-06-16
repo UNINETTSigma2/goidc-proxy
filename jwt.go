@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/parnurzeal/gorequest"
@@ -13,6 +14,14 @@ type JWTToken struct {
 }
 
 func getJWTToken(accessToken string, url string) (string, error) {
+	t1 := time.Now()
+	defer func() {
+		t2 := time.Now()
+		log.WithFields(log.Fields{
+			"took_ns": t2.Sub(t1),
+		}).Debug("getJWTToken returned")
+	}()
+
 	var jwt JWTToken
 	resp, _, errs := gorequest.New().Get(url).
 		Set("Authorization", "Bearer "+accessToken).

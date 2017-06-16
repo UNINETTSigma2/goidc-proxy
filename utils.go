@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -85,4 +86,18 @@ func getRedirectJS(cookieName string, url string) []byte {
 			window.location = "` + url + `";
 		</script>
 	`)
+}
+
+func GetIPsFromRequest(r *http.Request) []string {
+	var ips []string
+	for _, ip := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed != "" {
+			ips = append(ips, trimmed)
+		}
+	}
+	if r.RemoteAddr != "" {
+		ips = append(ips, strings.Trim(r.RemoteAddr[:strings.LastIndex(r.RemoteAddr, ":")], "[]"))
+	}
+	return ips
 }

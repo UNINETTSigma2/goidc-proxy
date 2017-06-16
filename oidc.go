@@ -100,10 +100,12 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		// Fetch state from cookie & path from cookie value
 		c, err := r.Cookie("state." + r.URL.Query().Get("state"))
 		if err != nil {
+			log.Warn("State cookie not found ", GetIPsFromRequest(r))
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
 		}
 
+		log.Debug("Got response back for state: "+c.Name+" from Source IPs ", GetIPsFromRequest(r))
 		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
 			log.Warn("No token found: %v", err)
@@ -112,13 +114,14 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 		oidcToken, ok := token.Extra("id_token").(string)
 		if !ok {
+			log.Warn("Failed in getting id_token ", GetIPsFromRequest(r))
 			http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
 			return
 		}
 
 		_, err = a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
-			log.Info("Failed to verify OpenID Token ", err.Error())
+			log.Info("Failed to verify OpenID Token "+err.Error()+" ", GetIPsFromRequest(r))
 			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -140,6 +143,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				}
 			}
 			if !authorized {
+				log.Debug("User is not authorized to access ", GetIPsFromRequest(r))
 				http.Error(w, "Not authorized to access resource", http.StatusForbidden)
 				return
 			}
@@ -149,7 +153,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
 			if err != nil {
-				http.Error(w, "Failed to getting User Info: "+err.Error(), http.StatusInternalServerError)
+				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
+				http.Error(w, "Failed in getting User Info: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
@@ -157,6 +162,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			if getEntry(a.redirectMap, userInfo.Subject) == 0 {
 				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo, groups)
 				if err != nil {
+					log.Warn("Failed to check user affiliations: "+err.Error()+" ", GetIPsFromRequest(r))
 					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -169,6 +175,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			}
 		}
 
+		log.Debug("Principal is authorized to access the resource from Source IPs ", GetIPsFromRequest(r))
+
 		// Check if downstream application wants JWT or OAuth2 token
 		var cToken string
 		var maxAge int
@@ -176,11 +184,13 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		if conf.GetStringValue("engine.token_type") == "jwt" {
 			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
 			if err != nil {
+				log.Warn("Failed to get JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
 				http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			parseJWT, err := jws.ParseJWT([]byte(cToken))
 			if err != nil {
+				log.Info("Failed to parse JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
 				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -204,9 +214,11 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		})
 		unescapedStateCookie, err := url.PathUnescape(c.Value)
 		if err != nil {
-			log.Warn("Failed unescaping state cookie, setting to / ", err);
+			log.Warn("Failed unescaping state cookie, setting to / ", err)
 			unescapedStateCookie = "/"
 		}
+		log.Debug("Redirecting to original path "+unescapedStateCookie+" after successful authnetication ", GetIPsFromRequest(r))
+
 		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
 	})
 }
@@ -218,12 +230,14 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
+				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
+				return
 			}
 
 			// Check if we have two factor enable for all or selected principals, if for selected
@@ -238,14 +252,16 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 
 		recToken, valid := a.checkTokenValidity(c.Value)
 		if !valid {
-			log.Info("Got invalid token, rediecting for authnetication")
+			log.Info("Got invalid token, rediecting for authnetication", GetIPsFromRequest(r))
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
+				return
 			}
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
+				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 			// Token is not valid, so redirecting to authenticate again
@@ -262,6 +278,14 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 }
 
 func (a *Authenticator) checkTokenValidity(data string) (string, bool) {
+	t1 := time.Now()
+	defer func() {
+		t2 := time.Now()
+		log.WithFields(log.Fields{
+			"took_ns": t2.Sub(t1),
+		}).Debug("checkTokenValidity returned")
+	}()
+
 	cData := strings.Split(data, SEP)
 	if len(cData) != 3 || !a.signer.checkSig(cData[0]+SEP+cData[1], cData[2]) {
 		log.Warn("Token signature does not match")

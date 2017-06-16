@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/parnurzeal/gorequest"
 )
@@ -10,6 +12,14 @@ type Group struct {
 }
 
 func getGroups(token string, url string) ([]string, []error) {
+	t1 := time.Now()
+	defer func() {
+		t2 := time.Now()
+		log.WithFields(log.Fields{
+			"took_ns": t2.Sub(t1),
+		}).Debug("getGroups returned")
+	}()
+
 	var groups []string
 	var groupBody []Group
 
