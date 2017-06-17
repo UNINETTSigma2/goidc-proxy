@@ -74,7 +74,7 @@ func getRedirectJS(cookieName string, url string) []byte {
 			var protoLen = window.location.protocol.length + 2; // for two slashes
 			var hostLen = window.location.hostname.length;
 			var cookieValue = href.substring(protoLen+hostLen, hrefLen);
-			if (cookieValue.startsWith(":")) {
+			if (cookieValue.indexOf(":") === 0) {
 				var cValLen = cookieValue.length;
 				cookieValue = cookieValue.substring(cookieValue.indexOf("/"), cValLen)
 			}
