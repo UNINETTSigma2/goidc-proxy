@@ -204,19 +204,21 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		// Setup the cookie which will be used by client to authn later
 		cValue := cToken + SEP + strconv.FormatInt(expiry, 10)
-		http.SetCookie(w, &http.Cookie{
+		cookie := &http.Cookie{
 			Name:     a.cookieName,
 			Value:    a.signer.getSignedData(cValue),
 			MaxAge:   maxAge,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   conf.GetBoolValue("server.secure_cookie"),
-		})
+		}
+		http.SetCookie(w, cookie)
 		unescapedStateCookie, err := url.PathUnescape(c.Value)
 		if err != nil {
 			log.Warn("Failed unescaping state cookie, setting to / ", err)
 			unescapedStateCookie = "/"
 		}
+		log.Debug("Token Cookie header size: ", len(cookie.String()))
 		log.Debug("Redirecting to original path "+unescapedStateCookie+" after successful authnetication ", GetIPsFromRequest(r))
 
 		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
