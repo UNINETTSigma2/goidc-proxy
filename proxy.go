@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -134,6 +135,7 @@ func newReverseProxy(target *url.URL) *httputil.ReverseProxy {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: conf.GetBoolValue("proxy.insecure_skip_verify")},
 	}
 
 	return &httputil.ReverseProxy{Director: director, Transport: &transport{proxyTransport}}
