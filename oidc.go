@@ -203,22 +203,32 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		// Setup the cookie which will be used by client to authn later
-		cValue := cToken + SEP + strconv.FormatInt(expiry, 10)
-		cookie := &http.Cookie{
-			Name:     a.cookieName,
-			Value:    a.signer.getSignedData(cValue),
-			MaxAge:   maxAge,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   conf.GetBoolValue("server.secure_cookie"),
+		cValue := a.signer.getSignedData(cToken + SEP + strconv.FormatInt(expiry, 10))
+		cnt := 1
+		log.Debug("Token Cookie size: ", len(cValue))
+		var cValues []string
+		if len(cValue) > 3500 {
+			cnt, cValues = splitCookie(cValue, 3500)
+		} else {
+			cValues = append(cValues, cValue)
 		}
-		http.SetCookie(w, cookie)
+		for i := 0; i < cnt; i++ {
+			cookie := &http.Cookie{
+				Name:     a.cookieName + strconv.Itoa(i),
+				Value:    cValues[i],
+				MaxAge:   maxAge,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   conf.GetBoolValue("server.secure_cookie"),
+			}
+			http.SetCookie(w, cookie)
+		}
+
 		unescapedStateCookie, err := url.PathUnescape(c.Value)
 		if err != nil {
 			log.Warn("Failed unescaping state cookie, setting to / ", err)
 			unescapedStateCookie = "/"
 		}
-		log.Debug("Token Cookie header size: ", len(cookie.String()))
 		log.Debug("Redirecting to original path "+unescapedStateCookie+" after successful authnetication ", GetIPsFromRequest(r))
 
 		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
@@ -227,7 +237,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(a.cookieName)
+		cValue, err := readCookie(r, a.cookieName)
 		if err != nil {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
@@ -252,7 +262,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		recToken, valid := a.checkTokenValidity(c.Value)
+		recToken, valid := a.checkTokenValidity(cValue)
 		if !valid {
 			log.Info("Got invalid token, rediecting for authnetication", GetIPsFromRequest(r))
 			uid, err := uuid.V4()

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,4 +102,37 @@ func GetIPsFromRequest(r *http.Request) []string {
 		ips = append(ips, strings.Trim(r.RemoteAddr[:strings.LastIndex(r.RemoteAddr, ":")], "[]"))
 	}
 	return ips
+}
+
+func splitCookie(cValue string, chunkLen int) (int, []string) {
+	cnt := 0
+	var cValues []string
+	for i := 0; len(cValue) > chunkLen; i = i + chunkLen {
+		cnt += 1
+		cValues = append(cValues, cValue[:chunkLen])
+		cValue = cValue[chunkLen:]
+	}
+	if len(cValue) > 0 {
+		cValues = append(cValues, cValue)
+		cnt += 1
+	}
+	return cnt, cValues
+}
+
+func readCookie(r *http.Request, cName string) (string, error) {
+	i := 0
+	var cValue string
+	for {
+		cookie, err := r.Cookie(cName + strconv.Itoa(i))
+		if err == nil {
+			cValue += cookie.Value
+		} else {
+			break
+		}
+		i += 1
+	}
+	if cValue == "" {
+		return "", errors.New("Failed in reading cookie")
+	}
+	return cValue, nil
 }
