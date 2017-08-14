@@ -69,25 +69,61 @@ func isXHR(path string) bool {
 }
 
 func getRedirectJS(cookieName string, url string) []byte {
+	// aria-hidden is to avoid screen readers blurting out technical details on this page.
 	return []byte(`
-		<script>
-			var href = window.location.href;
-			var hrefLen = href.length;
-			var protoLen = window.location.protocol.length + 2; // for two slashes
-			var hostLen = window.location.hostname.length;
-			var cookieValue = href.substring(protoLen+hostLen, hrefLen);
-			if (cookieValue.indexOf(":") === 0) {
-				var cValLen = cookieValue.length;
-				cookieValue = cookieValue.substring(cookieValue.indexOf("/"), cValLen)
-			}
-			var date = new Date();
-			date.setTime(date.getTime()+(28800*1000));
-			var expires = "; expires="+date.toString();
-			var cookieName = "` + cookieName + `";
-			document.cookie = cookieName+"="+encodeURIComponent(cookieValue)+expires+"; path=/";
-			window.location = "` + url + `";
-		</script>
-	`)
+<!DOCTYPE html>
+<html lang="en">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>OAuth Authentication redirect</title>
+<style type="text/css">
+	.spinner:after {
+		animation-duration: .4s;
+		animation-name: spin;
+		animation-iteration-count: infinite;
+	}
+	@keyframes spin {
+		0%% {content: "/";}
+		25%% {content: "-";}
+		50%% {content: "\\";}
+		75%% {content: "|";}
+		100%% {content: "/";}
+	}
+</style>
+
+<pre id="loading" style="display:none" aria-hidden="true">You are being redirected <span class="spinner"></span></pre>
+<pre id="explaination">You seem to have JavaScript disabled
+
+This page uses JavaScript to redirect you to a login page.
+The use of JavaScript is needed to keep the fragment in the URL intact. (the part after #)
+
+Please enable JavaScript and reload this page to use this web application.
+</pre>
+
+<script type="application/javascript">
+	// Hide the JavaScript message, since JavaScript clearly works.
+	document.getElementById('explaination').style.display = 'none';
+	document.getElementById('explaination').setAttribute('aria-hidden', true);
+	document.getElementById('loading').style = 'block';
+
+	// Get the current path from the address bar.
+	// The path is everything from the third slash,
+	// where the second and third slash cannot be continguous,
+	// so file:/// URLs won't work.
+
+	// http  ://  example.com /foo/bar#fragment
+	//      :\/\/   [^\/]+          (\/.*)     $
+	var path = window.location.href.match(/:\/\/[^\/]+(\/.*)$/)[1];
+
+	// Format the expiry string in the cookie.
+	var expiryDate = new Date();
+	expiryDate.setTime(expiryDate.getTime() + 28800 * 1000);
+	var expiryString = "; expires=" + expiryDate.toString();
+
+	// Write the cookie and redirect to login page.
+	document.cookie = "` + cookieName + `" + "=" + encodeURIComponent(path) + expiryString + "; path=/";
+	window.location = "` + url + `";
+</script>
+`)
 }
 
 func GetIPsFromRequest(r *http.Request) []string {
