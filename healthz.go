@@ -24,7 +24,7 @@ type HealthInfo struct {
 
 func getCurrentHealth(backend string) *HealthInfo {
 	hi := &HealthInfo{
-		Version: version,
+		Version: defaultVersion,
 		Uptime:  math.Floor(time.Since(startTime).Seconds()),
 		Pid:     os.Getpid(),
 		Backend: backend,

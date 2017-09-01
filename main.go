@@ -15,9 +15,10 @@ import (
 	"github.com/uninett/goidc-proxy/conf"
 )
 
-var version = "none"
 var startTime time.Time
 var xhrEndpoints []string
+
+const defaultVersion = "0.1"
 
 func init() {
 	// Log as JSON to stderr
@@ -27,24 +28,16 @@ func init() {
 	// Set up a version option, until we get a /healthz endpoint or
 	// something similar
 	showVersion := flag.Bool("version", false, "Prints version information and exits")
-	configFile := flag.String("c", "goidc.json", "Use the specified `configfile`")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("goidc-proxy version", version)
+		fmt.Println("goidc-proxy version", defaultVersion)
 		os.Exit(0)
 	}
-
-	// Find config file
-	err := conf.ReadConfig(*configFile)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"detail": err,
-		}).Fatal("Could not read configuration")
-	}
+	conf.LoadConfig()
 
 	// Set up correct log level
-	lvl, err := log.ParseLevel(conf.GetStringValue("engine.logging.level"))
+	lvl, err := log.ParseLevel(conf.Config.Engine.Logging.Level)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"detail": err,
@@ -55,11 +48,11 @@ func init() {
 	}
 }
 
-func listenHTTP(ssl bool, port int) {
+func listenHTTP(ssl bool, port uint16) {
 	srv := &http.Server{
-		ReadTimeout:  time.Duration(conf.GetIntValue("server.readtimeout")) * time.Second,
-		WriteTimeout: time.Duration(conf.GetIntValue("server.writetimeout")) * time.Second,
-		IdleTimeout:  time.Duration(conf.GetIntValue("server.idletimeout")) * time.Second,
+		ReadTimeout:  conf.Config.Server.ReadTimeout,
+		WriteTimeout: conf.Config.Server.WriteTimeout,
+		IdleTimeout:  conf.Config.Server.IdleTimeout,
 		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      nil,
 	}
@@ -77,8 +70,8 @@ func listenHTTP(ssl bool, port int) {
 		}
 		srv.TLSConfig = tlsConfig
 		log.Fatal(srv.ListenAndServeTLS(
-			conf.GetStringValue("server.cert"),
-			conf.GetStringValue("server.key")))
+			conf.Config.Server.Cert,
+			conf.Config.Server.Key))
 	} else {
 		log.Fatal(srv.ListenAndServe())
 	}
@@ -86,7 +79,7 @@ func listenHTTP(ssl bool, port int) {
 
 func main() {
 	// Get target/backend URL
-	targetURL, err := url.Parse(conf.GetStringValue("proxy.target"))
+	targetURL, err := url.Parse(conf.Config.Proxy.Target)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"detail": err,
@@ -96,10 +89,10 @@ func main() {
 	// Create proxy and middleware
 	upstream := NewUpstreamProxy(targetURL)
 	authn, err := newAuthenticator(
-		conf.GetStringValue("engine.client_id"),
-		conf.GetStringValue("engine.client_secret"),
-		conf.GetStringValue("engine.redirect_url"),
-		conf.GetStringValue("engine.issuer_url"))
+		conf.Config.Engine.ClientID,
+		conf.Config.Engine.ClientSecret,
+		conf.Config.Engine.RedirectUrl,
+		conf.Config.Engine.IssuerUrl)
 	if err != nil {
 		log.Fatal("Failed in getting authenticator", err)
 		os.Exit(1)
@@ -112,19 +105,19 @@ func main() {
 
 	// Get XHR Endpoints where we don't need to redirect
 	// Let application handles the error itself
-	if conf.GetStringValue("engine.xhr_endpoints") != "" {
-		xhrEndpoints = strings.Split(conf.GetStringValue("engine.xhr_endpoints"), ",")
+	if conf.Config.Engine.XhrEndpoints != "" {
+		xhrEndpoints = strings.Split(conf.Config.Engine.XhrEndpoints, ",")
 	}
 
 	// Start proxying
-	log.Println("Proxy initialized and listening on port", conf.GetIntValue("server.port"))
+	log.Println("Proxy initialized and listening on port", conf.Config.Server.Port)
 	startTime = time.Now()
-	port := conf.GetIntValue("server.port")
-	ssl := conf.GetBoolValue("server.ssl")
+	port := conf.Config.Server.Port
+	ssl := conf.Config.Server.SSL
 	go listenHTTP(ssl, port)
 
 	// Start TCP server for health checks
-	healthPort := conf.GetIntValue("server.health_port")
+	healthPort := conf.Config.Server.HealthPort
 	server, err := net.Listen("tcp", fmt.Sprintf(":%d", healthPort))
 	if server == nil {
 		panic("couldn't set up tcp socket: " + err.Error())

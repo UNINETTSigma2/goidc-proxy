@@ -50,7 +50,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusForbidden &&
-		conf.GetBoolValue("engine.twofactor.rediect_on_response") {
+		conf.Config.Engine.TwoFactor.RedictOnResponse {
 		// Check that the server actually sent compressed data
 		var reader io.ReadCloser
 		switch resp.Header.Get("Content-Encoding") {
@@ -84,7 +84,7 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 			acrVal := oauth2.SetAuthURLParam("acr_values", acr.Values)
 			var bodyData []byte
 			if isXHR(req.URL.Path) {
-				bodyData = append(append([]byte(`{"two_factor": true, "redirect_url": "`+oauthConfig.AuthCodeURL(state, acrVal)+`", "body":`), b...), []byte("}")...)
+				bodyData = append(append([]byte(`{"two_factor": true, "redirect_url": "` + oauthConfig.AuthCodeURL(state, acrVal) + `", "body":`), b...), []byte("}")...)
 				log.Info("Got 403 with non empty ACR Values, redirecting for XHR ", acrVal)
 			} else {
 				resp.StatusCode = http.StatusFound
@@ -135,7 +135,7 @@ func newReverseProxy(target *url.URL) *httputil.ReverseProxy {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: conf.GetBoolValue("proxy.insecure_skip_verify")},
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: conf.Config.Proxy.InsecureSkipVerify },
 	}
 
 	return &httputil.ReverseProxy{Director: director, Transport: &transport{proxyTransport}}

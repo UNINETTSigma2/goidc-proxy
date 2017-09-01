@@ -37,10 +37,10 @@ type Authenticator struct {
 }
 
 func newAuthenticator(
-	clientID string,
-	clientSecret string,
-	redirectUrl string,
-	issuerUrl string) (*Authenticator, error) {
+clientID string,
+clientSecret string,
+redirectUrl string,
+issuerUrl string) (*Authenticator, error) {
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuerUrl)
 	if err != nil {
@@ -48,7 +48,7 @@ func newAuthenticator(
 		return nil, err
 	}
 
-	scopes := strings.Split(conf.GetStringValue("engine.scopes"), ",")
+	scopes := strings.Split(conf.Config.Engine.Scopes, ",")
 	oauthConfig = oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -63,14 +63,14 @@ func newAuthenticator(
 	verifier := provider.Verifier(oidcConfig)
 
 	var acrVal oauth2.AuthCodeOption
-	if conf.GetStringValue("engine.twofactor.acr_values") != "" {
+	if conf.Config.Engine.TwoFactor.AcrValues != "" {
 		acrVal = oauth2.SetAuthURLParam("acr_values",
-			conf.GetStringValue("engine.twofactor.acr_values"))
+			conf.Config.Engine.TwoFactor.AcrValues)
 	}
 
 	var tfPMap map[string]struct{}
-	if conf.GetStringValue("engine.twofactor.principals") != "" {
-		tfSvals := strings.Split(conf.GetStringValue("engine.twofactor.principals"), ",")
+	if conf.Config.Engine.TwoFactor.Principals != "" {
+		tfSvals := strings.Split(conf.Config.Engine.TwoFactor.Principals, ",")
 		tfPMap = make(map[string]struct{})
 		for i := range tfSvals {
 			tfPMap[tfSvals[i]] = struct{}{}
@@ -83,7 +83,7 @@ func newAuthenticator(
 		verifier:    verifier,
 		ctx:         ctx,
 		cookieName:  "goidc",
-		signer:      NewSigner(conf.GetStringValue("engine.signkey")),
+		signer:      NewSigner(conf.Config.Engine.Signkey),
 		acr:         acrVal,
 		tfPrinipals: tfPMap,
 		redirectMap: redirectMap,
@@ -105,7 +105,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
-		log.Debug("Got response back for state: "+c.Name+" from Source IPs ", GetIPsFromRequest(r))
+		log.Debug("Got response back for state: " + c.Name + " from Source IPs ", GetIPsFromRequest(r))
 		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
 			log.Warn("No token found: %v", err)
@@ -121,19 +121,19 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		_, err = a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
-			log.Info("Failed to verify OpenID Token "+err.Error()+" ", GetIPsFromRequest(r))
-			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
+			log.Info("Failed to verify OpenID Token " + err.Error() + " ", GetIPsFromRequest(r))
+			http.Error(w, "Failed to verify OpenID Token: " + err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		var groups []string
-		if conf.GetStringValue("engine.groups_endpoint") != "" {
-			groups, _ = getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
+		if conf.Config.Engine.GroupEndpoint != "" {
+			groups, _ = getGroups(token.AccessToken, conf.Config.Engine.GroupEndpoint)
 		}
 
 		// Check if this given principals are allowed to access resource
-		if conf.GetStringValue("engine.authorized_principals") != "" {
-			authzPrinipals := strings.Split(conf.GetStringValue("engine.authorized_principals"), ",")
+		if conf.Config.Engine.AuthorizedPrincipals != "" {
+			authzPrinipals := strings.Split(conf.Config.Engine.AuthorizedPrincipals, ",")
 			authorized := false
 			for _, grp := range groups {
 				for _, p := range authzPrinipals {
@@ -150,11 +150,11 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		// Get user info and see if user/affiliations are in the list of twofactor_principals
-		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
+		if !conf.Config.Engine.TwoFactor.All && a.acr != nil {
 			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
 			if err != nil {
-				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
-				http.Error(w, "Failed in getting User Info: "+err.Error(), http.StatusInternalServerError)
+				log.Warn("Failed in getting User Info: " + err.Error() + " ", GetIPsFromRequest(r))
+				http.Error(w, "Failed in getting User Info: " + err.Error(), http.StatusInternalServerError)
 				return
 			}
 
@@ -162,8 +162,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			if getEntry(a.redirectMap, userInfo.Subject) == 0 {
 				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo, groups)
 				if err != nil {
-					log.Warn("Failed to check user affiliations: "+err.Error()+" ", GetIPsFromRequest(r))
-					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
+					log.Warn("Failed to check user affiliations: " + err.Error() + " ", GetIPsFromRequest(r))
+					http.Error(w, "Failed to check user affiliations: " + err.Error(), http.StatusInternalServerError)
 					return
 				}
 				if rediect {
@@ -181,17 +181,17 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		var cToken string
 		var maxAge int
 		var expiry int64
-		if conf.GetStringValue("engine.token_type") == "jwt" {
-			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
+		if conf.Config.Engine.TokenType == "jwt" {
+			cToken, err = getJWTToken(token.AccessToken, conf.Config.Engine.JwtTokenIssuer)
 			if err != nil {
-				log.Warn("Failed to get JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
-				http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
+				log.Warn("Failed to get JWT token: " + err.Error() + " ", GetIPsFromRequest(r))
+				http.Error(w, "Failed to get JWT token: " + err.Error(), http.StatusInternalServerError)
 				return
 			}
 			parseJWT, err := jws.ParseJWT([]byte(cToken))
 			if err != nil {
-				log.Info("Failed to parse JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
-				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
+				log.Info("Failed to parse JWT token: " + err.Error() + " ", GetIPsFromRequest(r))
+				http.Error(w, "Failed to parse JWT token: " + err.Error(), http.StatusInternalServerError)
 				return
 			}
 			maxAge = int(parseJWT.Claims().Get("exp").(float64) - float64(time.Now().Unix()))
@@ -219,7 +219,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				MaxAge:   maxAge,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   conf.GetBoolValue("server.secure_cookie"),
+				Secure:   conf.Config.Server.SecureCookie,
 			}
 			http.SetCookie(w, cookie)
 		}
@@ -229,7 +229,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			log.Warn("Failed unescaping state cookie, setting to / ", err)
 			unescapedStateCookie = "/"
 		}
-		log.Debug("Redirecting to original path "+unescapedStateCookie+" after successful authnetication ", GetIPsFromRequest(r))
+		log.Debug("Redirecting to original path " + unescapedStateCookie + " after successful authnetication ", GetIPsFromRequest(r))
 
 		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
 	})
@@ -242,7 +242,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
-				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
+				log.Debug("XHR request is unauthenticated, will send 401 not redirect " + r.URL.Path + " ", GetIPsFromRequest(r))
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 
@@ -254,10 +254,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
-			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+			if a.acr != nil && conf.Config.Engine.TwoFactor.All {
+				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
@@ -273,18 +273,18 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
-				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
+				log.Debug("XHR request is unauthenticated, will send 401 not redirect " + r.URL.Path + " ", GetIPsFromRequest(r))
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 			// Token is not valid, so redirecting to authenticate again
-			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+			if a.acr != nil && conf.Config.Engine.TwoFactor.All {
+				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
-		r.Header.Add("Authorization", "Bearer "+recToken)
+		r.Header.Add("Authorization", "Bearer " + recToken)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -299,7 +299,7 @@ func (a *Authenticator) checkTokenValidity(data string) (string, bool) {
 	}()
 
 	cData := strings.Split(data, SEP)
-	if len(cData) != 3 || !a.signer.checkSig(cData[0]+SEP+cData[1], cData[2]) {
+	if len(cData) != 3 || !a.signer.checkSig(cData[0] + SEP + cData[1], cData[2]) {
 		log.Warn("Token signature does not match")
 		return "", false
 	}

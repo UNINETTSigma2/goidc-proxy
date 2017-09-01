@@ -1,0 +1,60 @@
+# Important!!!
+# The config priority is config_file > env(if it is set) > default_setting
+proxy:
+  # default target value is "http://127.0.0.1:8000",
+  # or you can set env GOIDC_TARGET="xxxx"
+  target: "https://httpbin.org"
+
+  # default insecure_skip_verify is false,
+  # or you can set env GOIDC_INSECURE_SKIP_VERIFY="true"
+  insecure_skip_verify: false
+
+engine:
+  client_id: "00000-0000-000-000-00"
+  client_secret: "00000-0000-000-000-00"
+  issuer_url: "https://auth.dataporten.no"
+  redirect_url: "http://localhost:8888/oauth2/callback"
+  scopes: "userid,groups"
+  signkey: "testtesttesttest"
+  groups_endpoint: "https://groups-api.dataporten.no/groups/me/groups"
+  token_type: "oauth2"
+  jwt_token_issuer: "https://jwt.example.no"
+  xhr_endpoints: ""
+  authorized_principals: ""
+  twofactor:
+    all: false
+    principals: ""
+    acr_values: ""
+    backend: ""
+    rediect_on_response: false
+
+  logging:
+    # default level value is "debug",
+    level: "debug"
+
+server:
+  # default port value is 8888,
+  # or you can set env GOIDC_PORT=8888
+  port: 8888
+
+  # default health_port value is 1337,
+  health_port: 1337
+
+  cert: "cert.pem"
+
+  key: "key.pem"
+
+  # default readtimeout value is 2s,
+  readtimeout: 2s
+
+  # default writetimeout value is 20s,
+  writetimeout: 20s
+
+  # default idletimeout value is 120s,
+  idletimeout: 120s
+
+  # default port value is false,
+  # or you can set env GOIDC_SSL=false
+  ssl: false
+
+  secure_cookie: false
