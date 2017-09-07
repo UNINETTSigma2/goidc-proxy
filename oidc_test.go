@@ -51,7 +51,7 @@ func TestAuthHandlerRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
+	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
 
 	locBytes, err := ioutil.ReadAll(w.Body)
 	assert.Nil(err)
@@ -75,7 +75,7 @@ func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
+	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
 }
 
 func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
@@ -95,7 +95,7 @@ func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
+	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
 }
 
 func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
@@ -116,7 +116,7 @@ func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200")
+	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
 }
 
 func TestAuthHandlerCookie(t *testing.T) {
@@ -136,5 +136,5 @@ func TestAuthHandlerCookie(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200 OK")
+	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
 }
