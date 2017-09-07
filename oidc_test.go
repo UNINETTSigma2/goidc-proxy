@@ -25,7 +25,7 @@ var dummyConfig = oauth2.Config{
 }
 
 var dummyCookie = &http.Cookie{
-	Name:   "test-cookie",
+	Name:   "test-cookie0",
 	Value:  "dummy-token",
 	MaxAge: 3600,
 	Path:   "/",
@@ -136,5 +136,5 @@ func TestAuthHandlerCookie(t *testing.T) {
 	ah := auth.authHandler(testAuthHandler(t))
 	ah.ServeHTTP(w, r)
 
-	assert.Equal(http.StatusForbidden, w.Code, "authHandler should return 403 Forbidden")
+	assert.Equal(http.StatusOK, w.Code, "authHandler should return 200 OK")
 }
