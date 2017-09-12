@@ -18,6 +18,17 @@ var Config = Configer{
 		Target:"http://127.0.0.1:8000",
 		InsecureSkipVerify:false},
 	Engine:EngineConfig{
+		ClientID:"00000-0000-000-000-00",
+		ClientSecret: "00000-0000-000-000-00",
+		IssuerUrl:"https://auth.dataporten.no",
+		RedirectUrl: "http://localhost:8888/oauth2/callback",
+		Scopes:"userid,groups",
+		Signkey:"testtesttesttest",
+		GroupEndpoint:"",
+		TokenType:"oauth2",
+		JwtTokenIssuer:"https://jwt.example.no",
+		TwoFactor:TwoFactorConfig{All:false, RedictOnResponse:false},
+		Role:"",
 		Logging:LogConfig{Level:"debug"}},
 	Server:ServerConfig{
 		Port:8888,
@@ -39,6 +50,7 @@ type EngineConfig struct {
 	IssuerUrl            string `yaml:"issuer_url"`
 	RedirectUrl          string `yaml:"redirect_url"`
 	Scopes               string `yaml:"scopes"`
+	Role                 string `yaml:"role"`
 	Signkey              string `yaml:"signkey"`
 	GroupEndpoint        string `yaml:"groups_endpoint"`
 	TokenType            string `yaml:"token_type"`
@@ -78,38 +90,98 @@ type ServerConfig struct {
 
 func LoadConfig() {
 	// load env config
-	if val, ok := os.LookupEnv("GOIDC_TARGET"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Proxy_TARGET"); ok {
 		Config.Proxy.Target = val
 	}
-	if val, ok := os.LookupEnv("GOIDC_INSECURE_SKIP_VERIFY"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Proxy_InsecureSkipVerify"); ok {
 		Config.Proxy.InsecureSkipVerify = val == "true"
 	}
-	if val, ok := os.LookupEnv("GOIDC_ClientID"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Engine_ClientID"); ok {
 		Config.Engine.ClientID = val
 	}
-	if val, ok := os.LookupEnv("GOIDC_ClientSecret"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Engine_ClientSecret"); ok {
 		Config.Engine.ClientSecret = val
 	}
-	if val, ok := os.LookupEnv("GOIDC_INSECURE_SKIP_VERIFY"); ok {
-		Config.Proxy.InsecureSkipVerify = val == "true"
+	if val, ok := os.LookupEnv("GOIDC_Engine_IssuerURL"); ok {
+		Config.Engine.IssuerUrl = val
 	}
-	if val, ok := os.LookupEnv("GOIDC_PORT"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Engine_RedirectUrl"); ok {
+		Config.Engine.RedirectUrl = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_Scopes"); ok {
+		Config.Engine.Scopes = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_Role"); ok {
+		Config.Engine.Role = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_Signkey"); ok {
+		Config.Engine.Signkey = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_GroupEndpoint"); ok {
+		Config.Engine.GroupEndpoint = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_TokenType"); ok {
+		Config.Engine.TokenType = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_JwtTokenIssuer"); ok {
+		Config.Engine.JwtTokenIssuer = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_XhrEndpoints"); ok {
+		Config.Engine.XhrEndpoints = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_AuthorizedPrincipals"); ok {
+		Config.Engine.AuthorizedPrincipals = val
+	}
+
+	if val, ok := os.LookupEnv("GOIDC_Engine_TwoFactor_All"); ok {
+		Config.Engine.TwoFactor.All = val == "true"
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_TwoFactor_Principals"); ok {
+		Config.Engine.TwoFactor.Principals = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_TwoFactor_AcrValues"); ok {
+		Config.Engine.TwoFactor.AcrValues = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_TwoFactor_Backend"); ok {
+		Config.Engine.TwoFactor.Backend = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Engine_TwoFactor_RedictOnResponse"); ok {
+		Config.Engine.TwoFactor.RedictOnResponse = val == "true"
+	}
+
+	if val, ok := os.LookupEnv("GOIDC_Engine_Logging_Level"); ok {
+		Config.Engine.Logging.Level = val
+	}
+
+	if val, ok := os.LookupEnv("GOIDC_Server_PORT"); ok {
 		Port, _ := strconv.ParseUint(val, 10, 16)
 		Config.Server.Port = uint16(Port)
 	}
-
-	if val, ok := os.LookupEnv("GOIDC_SSL"); ok {
+	if val, ok := os.LookupEnv("GOIDC_Server_HealthPort"); ok {
+		Port, _ := strconv.ParseUint(val, 10, 16)
+		Config.Server.HealthPort = uint16(Port)
+	}
+	if val, ok := os.LookupEnv("GOIDC_Server_Cert"); ok {
+		Config.Server.Cert = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Server_Key"); ok {
+		Config.Server.Key = val
+	}
+	if val, ok := os.LookupEnv("GOIDC_Server_SSL"); ok {
 		Config.Server.SSL = val == "true"
+	}
+	if val, ok := os.LookupEnv("GOIDC_Server_SecureCookie"); ok {
+		Config.Server.SecureCookie = val == "true"
 	}
 
 	// load file config
 	filename, err := filepath.Abs(*configfile)
 	if err != nil {
-		panic(err)
+		return
 	}
 	yamlFile, err := ioutil.ReadFile(filename)
 	if err != nil {
-		panic(err)
+		return
 	}
 	Config.Yaml = yamlFile
 
