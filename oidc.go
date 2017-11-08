@@ -16,6 +16,8 @@ import (
 	"github.com/m4rw3r/uuid"
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
+	"fmt"
+	"encoding/json"
 )
 
 type UserIDSec struct {
@@ -34,6 +36,27 @@ type Authenticator struct {
 	acr          oauth2.AuthCodeOption
 	tfPrinipals  map[string]struct{}
 	redirectMap  TTLMap
+}
+
+type  TokenStruct struct {
+	Azp                string `json:"azp"`
+	Given_name         string `json:"given_name"`
+	Email              string `json:"email"`
+	Aud                string `json:"aud"`
+	Iss                string `json:"iss"`
+	Sub                string `json:"sub"`
+	Typ                string `json:"typ"`
+	Auth_time          uint `json:"auth_time"`
+	Roles              []string `json:"roles"`
+	Preferred_username string `json:"preferred_username"`
+	Family_name        string `json:"family_name"`
+	Jti                string `json:"jti"`
+	Iat                uint `json:"iat"`
+	Name               string `json:"name"`
+	Exp                uint `json:"exp"`
+	Session_state      string `json:"session_state"`
+	Acr                int `json:"acr"`
+	Nbf                int `json:"nbf"`
 }
 
 func newAuthenticator(
@@ -112,13 +135,14 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		log.Debug("token.Extra('id_token').(string)")
 		oidcToken, ok := token.Extra("id_token").(string)
 		if !ok {
 			log.Warn("Failed in getting id_token ", GetIPsFromRequest(r))
 			http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
 			return
 		}
-
+		log.Debug("a.verifier.Verify")
 		_, err = a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
 			log.Info("Failed to verify OpenID Token " + err.Error() + " ", GetIPsFromRequest(r))
@@ -127,11 +151,13 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		var groups []string
+		log.Debug("conf.Config.Engine.GroupEndpoint",conf.Config.Engine.GroupEndpoint)
 		if conf.Config.Engine.GroupEndpoint != "" {
 			groups, _ = getGroups(token.AccessToken, conf.Config.Engine.GroupEndpoint)
 		}
 
 		// Check if this given principals are allowed to access resource
+		log.Debug("conf.Config.Engine.AuthorizedPrincipals",conf.Config.Engine.AuthorizedPrincipals)
 		if conf.Config.Engine.AuthorizedPrincipals != "" {
 			authzPrinipals := strings.Split(conf.Config.Engine.AuthorizedPrincipals, ",")
 			authorized := false
@@ -200,6 +226,32 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			cToken = token.AccessToken
 			maxAge = int(token.Expiry.Unix() - time.Now().Unix())
 			expiry = int64(token.Expiry.Unix())
+		}
+		rawIDToken, ok := token.Extra("id_token").(string)
+		if !ok {
+			http.Error(w, "no id_token in token response", http.StatusInternalServerError)
+			return
+		}
+		idToken, err := a.verifier.Verify(r.Context(), rawIDToken)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to verify ID token: %v", err), http.StatusInternalServerError)
+			return
+		}
+		var claims json.RawMessage
+		idToken.Claims(&claims)
+		res, _ := claims.MarshalJSON()
+		var TokenJson TokenStruct
+		json.Unmarshal(res, &TokenJson)
+		var Access bool = false
+		for _, v := range TokenJson.Roles {
+			if v == conf.Config.Engine.Role {
+				Access = true
+				break
+			}
+		}
+		if !Access {
+			http.Error(w, "we do not allow you!", http.StatusForbidden)
+			return
 		}
 
 		// Setup the cookie which will be used by client to authn later
