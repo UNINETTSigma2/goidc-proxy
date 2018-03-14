@@ -127,7 +127,27 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		var groups []string
 		if conf.GetStringValue("engine.groups_endpoint") != "" {
-			groups, _ = getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
+			groupURLs := strings.Split(conf.GetStringValue("engine.groups_endpoint"), ",")
+
+			groupsOut := make(chan []string)
+			for _, groupURL := range groupURLs {
+				go func(currGroupURL string) {
+					userGroups, err := getGroups(token.AccessToken, currGroupURL)
+
+					if err != nil {
+						log.Infof("Unable to fetch groups from: %s, failed with: %s", currGroupURL, err)
+					}
+
+					groupsOut <- userGroups
+				}(groupURL)
+			}
+
+			for _ = range groupURLs {
+				select {
+				case newGroups := <-groupsOut:
+					groups = append(groups, newGroups...)
+				}
+			}
 		}
 
 		// Check if this given principals are allowed to access resource
