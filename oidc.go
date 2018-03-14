@@ -94,6 +94,31 @@ func newAuthenticator(
 	return authneticator, nil
 }
 
+func getUserGroups(token *oauth2.Token, groupURLs []string) []string {
+	var groups []string
+	groupsOut := make(chan []string)
+	for _, groupURL := range groupURLs {
+		go func(currGroupURL string) {
+			userGroups, err := getGroups(token.AccessToken, currGroupURL)
+
+			if err != nil {
+				log.Warnf("Unable to fetch groups from: %s, failed with: %s", currGroupURL, err)
+			}
+
+			groupsOut <- userGroups
+		}(groupURL)
+	}
+
+	for _ = range groupURLs {
+		select {
+		case newGroups := <-groupsOut:
+			groups = append(groups, newGroups...)
+		}
+	}
+
+	return groups
+}
+
 func (a *Authenticator) callbackHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Fetch state from cookie & path from cookie value
@@ -127,7 +152,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		var groups []string
 		if conf.GetStringValue("engine.groups_endpoint") != "" {
-			groups, _ = getGroups(token.AccessToken, conf.GetStringValue("engine.groups_endpoint"))
+			groupURLs := strings.Split(conf.GetStringValue("engine.groups_endpoint"), ",")
+			groups = getUserGroups(token, groupURLs)
 		}
 
 		// Check if this given principals are allowed to access resource
