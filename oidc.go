@@ -57,8 +57,7 @@ func newAuthenticator(
 		Scopes:       append([]string{oidc.ScopeOpenID}, scopes...),
 	}
 	oidcConfig := &oidc.Config{
-		ClientID:       clientID,
-		SkipNonceCheck: true,
+		ClientID: clientID,
 	}
 	verifier := provider.Verifier(oidcConfig)
 
