@@ -24,7 +24,7 @@ test-project:
     - mkdir -p $GOPATH/src/$REPO_NAME
     - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
     - cd $GOPATH/src/$REPO_NAME
-    - cp goidc.json.example goidc.json
+    - cp goidc_test.json goidc.json
     - glide install
     - go get -v github.com/go-playground/overalls
     - overalls -project=$REPO_NAME -ignore=.git,.glide,vendor -debug -- -race -v
