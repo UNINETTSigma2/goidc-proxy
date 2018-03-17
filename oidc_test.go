@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -57,6 +61,50 @@ func TestAuthHandlerRedirect(t *testing.T) {
 	assert.Nil(err)
 	loc := string(locBytes[:len(locBytes)])
 	assert.True(strings.Contains(loc, dummyConfig.Endpoint.AuthURL+"?client_id="+dummyConfig.ClientID), "Redirect to correct URL")
+}
+
+func createMockGroupServer(rawURL string) (error, *httptest.Server) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return err, nil
+	}
+	groupsHost := parsedURL.Host
+
+	groupJSON, err := json.Marshal([]Group{Group{"0000-" + rawURL}})
+	if err != nil {
+		return fmt.Errorf("Failed to marshal JSON, got error: ", err), nil
+	}
+
+	l, err := net.Listen("tcp", groupsHost)
+	if err != nil {
+		return fmt.Errorf("Failed to listen to: %s! Got error: %s", groupsHost, err), nil
+	}
+
+	groupsServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(groupJSON)
+
+	}))
+	groupsServer.Listener = l
+
+	return nil, groupsServer
+}
+
+func TestGroupsGetter(t *testing.T) {
+	groupURLs := []string{"http://localhost:28765", "http://should-not-work.test"}
+	err, mockGroupsServer := createMockGroupServer(groupURLs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockGroupsServer.Start()
+	defer mockGroupsServer.Close()
+	mockToken := &oauth2.Token{AccessToken: "test-token"}
+
+	groups := getUserGroups(mockToken, groupURLs)
+	for _, g := range groups {
+		assert.True(t, strings.HasPrefix(g, "0000-"), "groups returned incorrectly")
+	}
 }
 
 func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
