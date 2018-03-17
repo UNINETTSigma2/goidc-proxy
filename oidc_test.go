@@ -217,6 +217,8 @@ func TestGroupsGetter(t *testing.T) {
 	mockToken := &oauth2.Token{AccessToken: "test-token"}
 
 	groups := getUserGroups(mockToken, groupURLs)
+	assert.True(t, len(groups) == 1, "wrong number of groups returned")
+
 	for _, g := range groups {
 		assert.True(t, strings.HasPrefix(g, "0000-"), "groups returned incorrectly")
 	}
