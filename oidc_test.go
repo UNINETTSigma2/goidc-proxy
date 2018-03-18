@@ -203,6 +203,8 @@ func TestCallbackHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 	ah := auth.callbackHandler()
 	ah.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusFound, w.Code, "authHandler should return 302 Found")
 }
 
 func TestGroupsGetter(t *testing.T) {
