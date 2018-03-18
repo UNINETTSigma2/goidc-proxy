@@ -1,0 +1,38 @@
+{
+  "proxy": {
+    "target": "http://localhost:8888"
+  },
+  "engine": {
+    "client_id": "00000000-1111-2222-3333-444444444444",
+    "client_secret": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    "issuer_url": "https://auth.dataporten.no",
+    "redirect_url": "http://localhost:1234/oauth2/callback",
+    "scopes": "[test]",
+    "signkey": "test",
+    "token_type": "",
+    "jwt_token_issuer": "",
+    "groups_endpoint": "http://127.0.0.1:28765,http://should-not-work.test",
+    "xhr_endpoints": "",
+    "authorized_principals": "",
+    "twofactor": {
+      "all": false,
+      "principals": "",
+      "acr_values": "",
+      "backend": ""
+    },
+    "logging": {
+      "level": "info"
+    }
+  },
+  "server": {
+    "port": 1234,
+    "health_port": 1337,
+    "cert": "cert.pem",
+    "key": "key.pem",
+    "readtimeout": 10,
+    "writetimeout": 20,
+    "idletimeout": 120,
+    "ssl": false,
+    "secure_cookie": false
+  }
+}
