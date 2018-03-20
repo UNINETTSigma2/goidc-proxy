@@ -27,7 +27,7 @@ test-project:
     - cp goidc_test.json goidc.json
     - glide install
     - go get -v github.com/go-playground/overalls
-    - overalls -project=$REPO_NAME -ignore=.git,.glide,vendor -debug -- -race -v
+    - overalls -project=$REPO_NAME -covermode=atomic -ignore=.git,.glide,vendor -debug -- -race -v
     - go tool cover -func=overalls.coverprofile
 
 build-project:
