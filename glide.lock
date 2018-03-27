@@ -1,8 +1,8 @@
 hash: 029d04ba28feaea320a8b025603504b860f6f7af2fa57904af73989757c547aa
-updated: 2017-03-02T19:36:55.571492373+01:00
+updated: 2018-03-20T14:29:42.013046693+01:00
 imports:
 - name: github.com/coreos/go-oidc
-  version: f828b1fc9b58b59bd70ace766bfc190216b58b01
+  version: 065b426bd41667456c1a924468f507673629c46b
 - name: github.com/davecgh/go-spew
   version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
   subpackages:
@@ -70,7 +70,6 @@ imports:
   version: 906cda9512f77671ab44f8c8563b13a8e707b230
   subpackages:
   - context
-  - context/ctxhttp
   - publicsuffix
 - name: golang.org/x/oauth2
   version: 810daf0509f84359cfa9527f6ea4886f1dbabfc5
