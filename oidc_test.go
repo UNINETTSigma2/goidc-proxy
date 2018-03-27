@@ -148,7 +148,7 @@ func createMockGroupServer(rawURL string) (error, *httptest.Server) {
 
 	groupJSON, err := json.Marshal([]Group{Group{"0000-" + rawURL}})
 	if err != nil {
-		return fmt.Errorf("Failed to marshal JSON, got error: ", err), nil
+		return fmt.Errorf("Failed to marshal JSON, got error: %s", err), nil
 	}
 
 	l, err := net.Listen("tcp", groupsHost)
