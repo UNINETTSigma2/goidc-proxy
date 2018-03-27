@@ -133,7 +133,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
 			log.Warn("No token found: %v", err)
-			w.WriteHeader(http.StatusUnauthorized)
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		oidcToken, ok := token.Extra("id_token").(string)
@@ -194,6 +194,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				if rediect {
 					log.Debug("Redirecting for Two factor auth with UserID ", userInfo.Subject)
 					addEntry(a.redirectMap, userInfo.Subject, time.Now().Unix())
+					w.WriteHeader(http.StatusForbidden)
 					w.Write(getRedirectJS(c.Name, oauthConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
 					return
 				}
@@ -280,8 +281,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
+				w.WriteHeader(http.StatusForbidden)
 				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
+				w.WriteHeader(http.StatusForbidden)
 				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
@@ -303,8 +306,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			}
 			// Token is not valid, so redirecting to authenticate again
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
+				w.WriteHeader(http.StatusForbidden)
 				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
+				w.WriteHeader(http.StatusForbidden)
 				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
 			}
 			return
