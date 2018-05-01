@@ -14,6 +14,8 @@ stages:
   - test
   - build
   - deploy
+  - docker-latest
+  - docker-stable
 
 test-project:
   stage: test
@@ -90,6 +92,8 @@ docker-latest:
     - docker push "registry.uninett.no/public/goidc-proxy:latest"
   only:
     - master
+  when:
+    manual
 
 docker-stable:
   stage: deploy
@@ -100,3 +104,5 @@ docker-stable:
     - docker push "registry.uninett.no/public/goidc-proxy:$CI_BUILD_REF_NAME"
   only:
     - tags
+  when:
+    manual
