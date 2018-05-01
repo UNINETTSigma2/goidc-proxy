@@ -1,4 +1,4 @@
-image: golang:1.8
+image: golang:1.10
 
 variables:
   REPO_NAME: github.com/uninett/goidc-proxy
@@ -42,7 +42,7 @@ build-project:
     - mv $CI_PROJECT_DIR/* $GOPATH/src/$REPO_NAME
     - cd $GOPATH/src/$REPO_NAME
     - glide install
-    - go build -o $CI_PROJECT_DIR/goidc-proxy
+    - CGO_ENABLED=0 go build -o $CI_PROJECT_DIR/goidc-proxy
   artifacts:
     paths:
       - goidc-proxy
