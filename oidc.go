@@ -160,10 +160,28 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		if conf.GetStringValue("engine.authorized_principals") != "" {
 			authzPrinipals := strings.Split(conf.GetStringValue("engine.authorized_principals"), ",")
 			authorized := false
+
+			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
+			if err != nil {
+				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
+			} else {
+				for _, p := range authzPrinipals {
+					if p == userInfo.Subject {
+						authorized = true
+						break
+					}
+				}
+			}
+
 			for _, grp := range groups {
+				if authorized == true {
+					break
+				}
+
 				for _, p := range authzPrinipals {
 					if p == grp {
 						authorized = true
+						break
 					}
 				}
 			}
