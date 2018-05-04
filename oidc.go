@@ -173,15 +173,17 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				}
 			}
 
-			for _, grp := range groups {
-				if authorized == true {
-					break
-				}
-
-				for _, p := range authzPrinipals {
-					if p == grp {
-						authorized = true
+			if authorized == false {
+				for _, grp := range groups {
+					if authorized == true {
 						break
+					}
+
+					for _, p := range authzPrinipals {
+						if p == grp {
+							authorized = true
+							break
+						}
 					}
 				}
 			}
