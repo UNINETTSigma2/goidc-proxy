@@ -166,14 +166,14 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
 			} else {
 				for _, p := range authzPrinipals {
-					if p == userInfo.Subject {
+					if p == "fc:uid:"+userInfo.Subject {
 						authorized = true
 						break
 					}
 				}
 			}
 
-			if authorized == false {
+			if !authorized {
 				for _, grp := range groups {
 					if authorized == true {
 						break
