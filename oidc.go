@@ -34,6 +34,7 @@ type Authenticator struct {
 	acr          oauth2.AuthCodeOption
 	tfPrinipals  map[string]struct{}
 	redirectMap  TTLMap
+	logoutURL    string
 }
 
 func newAuthenticator(
@@ -76,6 +77,10 @@ func newAuthenticator(
 		}
 	}
 	redirectMap := TTLMap{m: make(map[string]Value)}
+	logoutURL := conf.GetStringValue("engine.logout_redirect_url")
+	if logoutURL == "" {
+		logoutURL = "/"
+	}
 
 	authneticator := &Authenticator{
 		provider:    provider,
@@ -86,6 +91,7 @@ func newAuthenticator(
 		acr:         acrVal,
 		tfPrinipals: tfPMap,
 		redirectMap: redirectMap,
+		logoutURL:   logoutURL,
 	}
 
 	// Expire enteries in a seperate routines
@@ -387,4 +393,25 @@ func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo
 	}
 
 	return false, nil
+}
+
+func (a *Authenticator) logoutHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		i := 0
+		for {
+			cookie, err := r.Cookie(a.cookieName + strconv.Itoa(i))
+			if err == nil {
+				cookie.Expires = time.Now().AddDate(-10, 0, 0)
+				cookie.Value = "42"
+				cookie.Path = "/"
+				cookie.HttpOnly = true
+				http.SetCookie(w, cookie)
+			} else {
+				break
+			}
+			i += 1
+		}
+		log.Debug("logging out user")
+		http.Redirect(w, r, a.logoutURL, http.StatusFound)
+	})
 }

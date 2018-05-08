@@ -108,6 +108,7 @@ func main() {
 	// Configure routes
 	http.Handle("/healthz", healthzHandler(targetURL.String()))
 	http.Handle("/oauth2/callback", authn.callbackHandler())
+	http.Handle("/oauth2/logout", authn.logoutHandler())
 	http.Handle("/", authn.authHandler(upstream))
 
 	// Get XHR Endpoints where we don't need to redirect
