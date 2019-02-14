@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -21,6 +22,7 @@ import (
 
 type transport struct {
 	http.RoundTripper
+	authenticators map[string]*Authenticator
 }
 
 type ACRValues struct {
@@ -83,13 +85,18 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 			}
 			acrVal := oauth2.SetAuthURLParam("acr_values", acr.Values)
 			var bodyData []byte
+			authn, found := t.authenticators[req.Host]
+			if !found {
+				return resp, fmt.Errorf("No oauth config found for host: %s", req.Host)
+			}
 			if isXHR(req.URL.Path) {
-				bodyData = append(append([]byte(`{"two_factor": true, "redirect_url": "`+oauthConfig.AuthCodeURL(state, acrVal)+`", "body":`), b...), []byte("}")...)
+
+				bodyData = append(append([]byte(`{"two_factor": true, "redirect_url": "`+authn.clientConfig.AuthCodeURL(state, acrVal)+`", "body":`), b...), []byte("}")...)
 				log.Info("Got 403 with non empty ACR Values, redirecting for XHR ", acrVal)
 			} else {
 				resp.StatusCode = http.StatusFound
 				bodyData = []byte("{}")
-				resp.Header.Add("Location", oauthConfig.AuthCodeURL(state, acrVal))
+				resp.Header.Add("Location", authn.clientConfig.AuthCodeURL(state, acrVal))
 				log.Info("Got 403 with non empty ACR Values, redirecting ", acrVal)
 			}
 			resp.Body = ioutil.NopCloser(bytes.NewReader(bodyData))
@@ -100,8 +107,8 @@ func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	return resp, nil
 }
 
-func NewUpstreamProxy(target *url.URL) *UpstreamProxy {
-	proxy := newReverseProxy(target)
+func NewUpstreamProxy(target *url.URL, authenticators map[string]*Authenticator, useReqHost bool) *UpstreamProxy {
+	proxy := newReverseProxy(target, authenticators, useReqHost)
 	return &UpstreamProxy{target, proxy}
 }
 
@@ -114,11 +121,15 @@ func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewReverseProxy prvoides reverse proxy functionality towards target
-func newReverseProxy(target *url.URL) *httputil.ReverseProxy {
+func newReverseProxy(target *url.URL, authenticators map[string]*Authenticator, useReqHost bool) *httputil.ReverseProxy {
 	director := func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
-		req.Host = target.Host
+
+		if !useReqHost {
+			req.Host = target.Host
+		}
+
 		req.URL.Path = singleJoiningSlash(target.Path, req.URL.Path)
 	}
 
@@ -138,5 +149,5 @@ func newReverseProxy(target *url.URL) *httputil.ReverseProxy {
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: conf.GetBoolValue("proxy.insecure_skip_verify")},
 	}
 
-	return &httputil.ReverseProxy{Director: director, Transport: &transport{proxyTransport}}
+	return &httputil.ReverseProxy{Director: director, Transport: &transport{proxyTransport, authenticators}}
 }

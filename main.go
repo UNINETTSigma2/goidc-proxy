@@ -84,6 +84,48 @@ func listenHTTP(ssl bool, port int) {
 	}
 }
 
+func handleAuth(upstream http.Handler, authenticators map[string]*Authenticator) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		authn, found := authenticators[host]
+
+		if found {
+			authn.authHandler(upstream).ServeHTTP(w, r)
+		} else {
+			log.Errorf("Found no authenticator matching the host: %s. Maybe a redirect URL for this host is missing?", host)
+			http.Error(w, "Failed to find authenicator for the requested host.", http.StatusInternalServerError)
+		}
+	})
+}
+
+func handleCallback(authenticators map[string]*Authenticator) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		authn, found := authenticators[host]
+
+		if found {
+			authn.callbackHandler().ServeHTTP(w, r)
+		} else {
+			log.Errorf("Found no authenticator matching the host: %s. Maybe a redirect URL for this host is missing?", host)
+			http.Error(w, "Failed to find authenicator for the requested host.", http.StatusInternalServerError)
+		}
+	})
+}
+
+func handleLogout(authenticators map[string]*Authenticator) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		authn, found := authenticators[host]
+
+		if found {
+			authn.logoutHandler().ServeHTTP(w, r)
+		} else {
+			log.Errorf("Found no authenticator matching the host: %s. Maybe a redirect URL for this host is missing?", host)
+			http.Error(w, "Failed to find authenicator for the requested host.", http.StatusInternalServerError)
+		}
+	})
+}
+
 func main() {
 	// Get target/backend URL
 	targetURL, err := url.Parse(conf.GetStringValue("proxy.target"))
@@ -93,23 +135,39 @@ func main() {
 		}).Fatal("proxy.target is not a valid URL")
 	}
 
-	// Create proxy and middleware
-	upstream := NewUpstreamProxy(targetURL)
-	authn, err := newAuthenticator(
-		conf.GetStringValue("engine.client_id"),
-		conf.GetStringValue("engine.client_secret"),
-		conf.GetStringValue("engine.redirect_url"),
-		conf.GetStringValue("engine.issuer_url"))
-	if err != nil {
-		log.Fatal("Failed in getting authenticator", err)
-		os.Exit(1)
+	// Create a separate authenticator for each redirect URL, as this allows us to
+	// use the same proxy for different hosts.
+	authenticators := make(map[string]*Authenticator)
+	for _, ru := range strings.Split(conf.GetStringValue("engine.redirect_url"), ",") {
+		parsedRedirURL, err := url.Parse(ru)
+		if err != nil {
+			log.Fatalf("Invalid redirect URL: %s. Err: %s", ru, err)
+			os.Exit(1)
+		}
+
+		authn, err := newAuthenticator(
+			conf.GetStringValue("engine.client_id"),
+			conf.GetStringValue("engine.client_secret"),
+			ru,
+			conf.GetStringValue("engine.issuer_url"))
+
+		if err != nil {
+			log.Fatalf("Failed in getting authenticator: %s", err)
+			os.Exit(1)
+		}
+
+		authenticators[parsedRedirURL.Host] = authn
 	}
+
+	useReqHost := conf.GetBoolValue("engine.use_request_host") // Use the Host header of the original request
+	upstream := NewUpstreamProxy(targetURL, authenticators, useReqHost)
 
 	// Configure routes
 	http.Handle("/healthz", healthzHandler(targetURL.String()))
-	http.Handle("/oauth2/callback", authn.callbackHandler())
-	http.Handle("/oauth2/logout", authn.logoutHandler())
-	http.Handle("/", authn.authHandler(upstream))
+
+	http.Handle("/oauth2/logout", handleLogout(authenticators))
+	http.Handle("/oauth2/callback", handleCallback(authenticators))
+	http.Handle("/", handleAuth(upstream, authenticators))
 
 	// Get XHR Endpoints where we don't need to redirect
 	// Let application handles the error itself
