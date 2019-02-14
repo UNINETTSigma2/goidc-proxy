@@ -58,11 +58,11 @@ func testAuthHandler(t *testing.T) http.Handler {
 
 func TestAuthHandlerRedirect(t *testing.T) {
 	auth := &Authenticator{
-		cookieName: "test-cookie",
-		signer:     NewSigner("test"),
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+		clientConfig: dummyConfig,
 	}
 
-	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	w := httptest.NewRecorder()
@@ -175,10 +175,11 @@ func TestCallbackHandler(t *testing.T) {
 	// Create a issuer capable of signing our ID token.
 	signKey, verifier := createMockIssuer(t, "https://foo")
 	auth := &Authenticator{
-		cookieName: "state",
-		signer:     NewSigner("test"),
-		ctx:        context.Background(),
-		verifier:   verifier,
+		cookieName:   "state",
+		signer:       NewSigner("test"),
+		ctx:          context.Background(),
+		verifier:     verifier,
+		clientConfig: dummyConfig,
 	}
 
 	idToken := `{"iss":"https://foo"}`
@@ -189,7 +190,7 @@ func TestCallbackHandler(t *testing.T) {
 
 	}))
 	defer mockTokenServer.Close()
-	oauthConfig.Endpoint.TokenURL = mockTokenServer.URL
+	auth.clientConfig.Endpoint.TokenURL = mockTokenServer.URL
 
 	err, mockGroupsServer := createMockGroupServer(strings.Split(conf.GetStringValue("engine.groups_endpoint"), ",")[0])
 	if err != nil {
@@ -236,11 +237,11 @@ func TestGroupsGetter(t *testing.T) {
 
 func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		cookieName: "test-cookie",
-		signer:     NewSigner("test"),
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+		clientConfig: dummyConfig,
 	}
 
-	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = "dummy-token" + SEP + strconv.FormatInt(time.Now().Unix()+3600, 10)
@@ -255,11 +256,11 @@ func TestAuthHandlerUnsignedCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		cookieName: "test-cookie",
-		signer:     NewSigner("test"),
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+		clientConfig: dummyConfig,
 	}
 
-	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(
@@ -275,11 +276,11 @@ func TestAuthHandlerExpiredCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 	auth := &Authenticator{
-		cookieName: "test-cookie",
-		signer:     NewSigner("test"),
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+		clientConfig: dummyConfig,
 	}
 
-	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(
@@ -296,11 +297,11 @@ func TestAuthHandlerBadSignatureCookieRedirect(t *testing.T) {
 
 func TestAuthHandlerCookie(t *testing.T) {
 	auth := &Authenticator{
-		cookieName: "test-cookie",
-		signer:     NewSigner("test"),
+		cookieName:   "test-cookie",
+		signer:       NewSigner("test"),
+		clientConfig: dummyConfig,
 	}
 
-	oauthConfig = dummyConfig
 	assert := assert.New(t)
 	r := httptest.NewRequest("GET", "http://localhost/some_endpoint", nil)
 	dummyCookie.Value = auth.signer.getSignedData(

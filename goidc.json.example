@@ -16,6 +16,7 @@
 		"logout_redirect_url": "https://uninett.no",
 		"xhr_endpoints": "",
 		"authorized_principals": "",
+		"use_request_host": false,
 		"twofactor": {
 			"all": false,
 			"principals": "",

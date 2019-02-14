@@ -5,6 +5,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
+
 	//"github.com/davecgh/go-spew/spew"
 	"net/http"
 	"net/url"
@@ -21,8 +22,6 @@ import (
 type UserIDSec struct {
 	ID []string `json:"dataporten-userid_sec"`
 }
-
-var oauthConfig oauth2.Config
 
 type Authenticator struct {
 	provider     *oidc.Provider
@@ -45,12 +44,12 @@ func newAuthenticator(
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuerUrl)
 	if err != nil {
-		log.Error("failed to get provider: %v", err)
+		log.Errorf("failed to get provider: %v", err)
 		return nil, err
 	}
 
 	scopes := strings.Split(conf.GetStringValue("engine.scopes"), ",")
-	oauthConfig = oauth2.Config{
+	oauthConfig := oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     provider.Endpoint(),
@@ -83,15 +82,16 @@ func newAuthenticator(
 	}
 
 	authneticator := &Authenticator{
-		provider:    provider,
-		verifier:    verifier,
-		ctx:         ctx,
-		cookieName:  "goidc",
-		signer:      NewSigner(conf.GetStringValue("engine.signkey")),
-		acr:         acrVal,
-		tfPrinipals: tfPMap,
-		redirectMap: redirectMap,
-		logoutURL:   logoutURL,
+		provider:     provider,
+		verifier:     verifier,
+		ctx:          ctx,
+		cookieName:   "goidc",
+		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
+		acr:          acrVal,
+		tfPrinipals:  tfPMap,
+		logoutURL:    logoutURL,
+		redirectMap:  redirectMap,
+		clientConfig: oauthConfig,
 	}
 
 	// Expire enteries in a seperate routines
@@ -136,9 +136,9 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		log.Debug("Got response back for state: "+c.Name+" from Source IPs ", GetIPsFromRequest(r))
-		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
+		token, err := a.clientConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
-			log.Warn("No token found: %v", err)
+			log.Warnf("No token found: %v", err)
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -167,7 +167,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			authzPrinipals := strings.Split(conf.GetStringValue("engine.authorized_principals"), ",")
 			authorized := false
 
-			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
+			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
 			} else {
@@ -202,7 +202,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 		// Get user info and see if user/affiliations are in the list of twofactor_principals
 		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
-			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
+			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
 				http.Error(w, "Failed in getting User Info: "+err.Error(), http.StatusInternalServerError)
@@ -221,7 +221,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 					log.Debug("Redirecting for Two factor auth with UserID ", userInfo.Subject)
 					addEntry(a.redirectMap, userInfo.Subject, time.Now().Unix())
 					w.WriteHeader(http.StatusForbidden)
-					w.Write(getRedirectJS(c.Name, oauthConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
+					w.Write(getRedirectJS(c.Name, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
 					return
 				}
 			}
@@ -308,10 +308,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			//  we will redirect for twofactor auth after getting user identity
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
@@ -333,10 +333,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Token is not valid, so redirecting to authenticate again
 			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
 				w.WriteHeader(http.StatusForbidden)
-				w.Write(getRedirectJS("state."+uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}

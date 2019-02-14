@@ -46,9 +46,9 @@ func (u *UpstreamProxy) handleWebsocket(w http.ResponseWriter, r *http.Request) 
 	upstream, upstreamResp, err := websocket.DefaultDialer.Dial(upstreamAddr, upstreamHeader)
 	if err != nil {
 		if upstreamResp != nil {
-			log.Warn("dialing upstream websocket failed with code %d: %v", upstreamResp.StatusCode, err)
+			log.Warnf("dialing upstream websocket failed with code %d: %v", upstreamResp.StatusCode, err)
 		} else {
-			log.Warn("dialing upstream websocket failed: %v", err)
+			log.Warnf("dialing upstream websocket failed: %v", err)
 		}
 		http.Error(w, "websocket unavailable", http.StatusServiceUnavailable)
 		return
@@ -65,7 +65,7 @@ func (u *UpstreamProxy) handleWebsocket(w http.ResponseWriter, r *http.Request) 
 	}
 	client, err := upgrader.Upgrade(w, r, upgradeHeader)
 	if err != nil {
-		log.Warn("couldn't upgrade websocket request: %v", err)
+		log.Warnf("couldn't upgrade websocket request: %v", err)
 		http.Error(w, "websocket upgrade failed", http.StatusServiceUnavailable)
 		return
 	}
