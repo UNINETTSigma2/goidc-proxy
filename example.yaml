@@ -1,0 +1,78 @@
+# Important!!!
+# The config priority is config_file > env(if it is set) > default_setting
+proxy:
+  # default target value is "http://127.0.0.1:8000",
+  # or you can set env GOIDC_Proxy_TARGET="xxxx"
+  target: "https://httpbin.org"
+
+  # default insecure_skip_verify is false,
+  # or you can set env GOIDC_Proxy_InsecureSkipVerify="true"
+  insecure_skip_verify: false
+
+engine:
+  # env GOIDC_Engine_ClientID
+  client_id: "example-app"
+  # env GOIDC_Engine_ClientSecret
+  client_secret: "abfd6710-8319-4468-b861-0df9569b7dca"
+  # env GOIDC_Engine_IssuerURL
+  issuer_url: "https://auth.dataporten.no"
+  # env GOIDC_Engine_RedirectUrl
+  redirect_url: "http://localhost:8888/oauth2/callback"
+  # env GOIDC_Engine_Scopes
+  scopes: "email,offline_access"
+  # env GOIDC_Engine_Signkey
+  signkey: "testtesttesttest"
+  # env GOIDC_Engine_GroupEndpoint
+  groups_endpoint: "https://groups-api.dataporten.no/groups/me/groups"
+  # env GOIDC_Engine_TokenType
+  token_type: "oauth2"
+  # env GOIDC_Engine_JwtTokenIssuer
+  jwt_token_issuer: "https://jwt.example.no"
+  # env GOIDC_Engine_XhrEndpoints
+  xhr_endpoints: ""
+  # env GOIDC_Engine_AuthorizedPrincipals
+  authorized_principals: ""
+  twofactor:
+    # env GOIDC_Engine_TwoFactor_All
+    all: false
+    # env GOIDC_Engine_TwoFactor_Principals
+    principals: ""
+    # env GOIDC_Engine_TwoFactor_AcrValues
+    acr_values: ""
+    # env GOIDC_Engine_TwoFactor_Backend
+    backend: ""
+    # env GOIDC_Engine_TwoFactor_RedictOnResponse
+    rediect_on_response: false
+
+  logging:
+    # default level value is "debug",
+    # env GOIDC_Engine_Logging_Level
+    level: "debug"
+
+server:
+  # default port value is 8888,
+  # or you can set env GOIDC_Server_PORT=8888
+  port: 8888
+
+  # default health_port value is 1337,
+  # env GOIDC_Server_HealthPort
+  health_port: 1337
+  # env GOIDC_Server_Cert
+  cert: "cert.pem"
+  # env GOIDC_Server_Key
+  key: "key.pem"
+
+  # default readtimeout value is 2s,
+  readtimeout: 2s
+
+  # default writetimeout value is 20s,
+  writetimeout: 20s
+
+  # default idletimeout value is 120s,
+  idletimeout: 120s
+
+  # default port value is false,
+  # or you can set env GOIDC_Server_SSL=false
+  ssl: false
+  # env GOIDC_Server_SecureCookie
+  secure_cookie: false

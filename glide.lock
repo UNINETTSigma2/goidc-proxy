@@ -7,41 +7,20 @@ imports:
   version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
   subpackages:
   - spew
-- name: github.com/fsnotify/fsnotify
-  version: 7d7316ed6e1ed2de075aab8dfc76de5d158d66e1
 - name: github.com/golang/protobuf
   version: 69b215d01a5606c843240eab4937eab3acee6530
   subpackages:
   - proto
 - name: github.com/gorilla/websocket
   version: 4873052237e4eeda85cf50c071ef33836fe8e139
-- name: github.com/hashicorp/hcl
-  version: 630949a3c5fa3c613328e1b8256052cbc2327c9b
-  subpackages:
-  - hcl/ast
-  - hcl/parser
-  - hcl/scanner
-  - hcl/strconv
-  - hcl/token
-  - json/parser
-  - json/scanner
-  - json/token
 - name: github.com/m4rw3r/uuid
   version: 00c72d48d5aaaf3058e26d9641164c43ba239f33
-- name: github.com/magiconair/properties
-  version: b3b15ef068fd0b17ddf408a23669f20811d194d2
-- name: github.com/mitchellh/mapstructure
-  version: db1efb556f84b25a0a13a04aad883943538ad2e0
 - name: github.com/moul/http2curl
   version: 4e24498b31dba4683efb9d35c1c8a91e2eda28c8
 - name: github.com/parnurzeal/gorequest
   version: ea779001e09326d30d455dbf37bc0d08c49941a2
-- name: github.com/pelletier/go-buffruneio
-  version: c37440a7cf42ac63b919c752ca73a85067e05992
-- name: github.com/pelletier/go-toml
-  version: 13d49d4606eb801b8f01ae542b4afc4c6ee3d84a
 - name: github.com/pkg/errors
-  version: bfd5150e4e41705ded2129ec33379de1cb90b513
+  version: 01fa4104b9c248c8945d14d9f128454d5b28d595
 - name: github.com/pquerna/cachecontrol
   version: c97913dcbd76de40b051a9b4cd827f7eaeb7a868
   subpackages:
@@ -54,20 +33,10 @@ imports:
   - jwt
 - name: github.com/Sirupsen/logrus
   version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
-- name: github.com/spf13/afero
-  version: 9be650865eab0c12963d8753212f4f9c66cdcf12
-  subpackages:
-  - mem
-- name: github.com/spf13/cast
-  version: f820543c3592e283e311a60d2a600a664e39f6f7
-- name: github.com/spf13/jwalterweatherman
-  version: fa7ca7e836cf3a8bb4ebf799f472c12d7e903d66
-- name: github.com/spf13/pflag
-  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spf13/viper
   version: 7538d73b4eb9511d85a9f1dfef202eeb8ac260f4
 - name: golang.org/x/net
-  version: 906cda9512f77671ab44f8c8563b13a8e707b230
+  version: d58ca6618b994150e624f6888d871f4709db51a0
   subpackages:
   - context
   - publicsuffix
@@ -79,11 +48,6 @@ imports:
   version: 76cc09b634294339fa19ec41b5f2a0b3932cea8b
   subpackages:
   - unix
-- name: golang.org/x/text
-  version: d680ca3ed853995402af43b866311167281bdc20
-  subpackages:
-  - transform
-  - unicode/norm
 - name: google.golang.org/appengine
   version: 3a452f9e00122ead39586d68ffdb9c6e1326af3c
   subpackages:
