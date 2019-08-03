@@ -13,8 +13,10 @@
 		"groups_endpoint": "https://groups-api.dataporten.no/groups/me/groups",
 		"token_type": "oauth2",
 		"jwt_token_issuer": "https://jwt.example.no",
+		"logout_redirect_url": "https://uninett.no",
 		"xhr_endpoints": "",
 		"authorized_principals": "",
+		"use_request_host": false,
 		"twofactor": {
 			"all": false,
 			"principals": "",

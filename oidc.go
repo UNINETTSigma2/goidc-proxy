@@ -5,6 +5,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	oidc "github.com/coreos/go-oidc"
+
 	//"github.com/davecgh/go-spew/spew"
 	"net/http"
 	"net/url"
@@ -24,8 +25,6 @@ type UserIDSec struct {
 	ID []string `json:"dataporten-userid_sec"`
 }
 
-var oauthConfig oauth2.Config
-
 type Authenticator struct {
 	provider     *oidc.Provider
 	verifier     *oidc.IDTokenVerifier
@@ -36,6 +35,7 @@ type Authenticator struct {
 	acr          oauth2.AuthCodeOption
 	tfPrinipals  map[string]struct{}
 	redirectMap  TTLMap
+	logoutURL    string
 }
 
 type  TokenStruct struct {
@@ -67,12 +67,12 @@ issuerUrl string) (*Authenticator, error) {
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuerUrl)
 	if err != nil {
-		log.Error("failed to get provider: %v", err)
+		log.Errorf("failed to get provider: %v", err)
 		return nil, err
 	}
 
-	scopes := strings.Split(conf.Config.Engine.Scopes, ",")
-	oauthConfig = oauth2.Config{
+	scopes := strings.Split(conf.GetStringValue("engine.scopes"), ",")
+	oauthConfig := oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     provider.Endpoint(),
@@ -80,8 +80,7 @@ issuerUrl string) (*Authenticator, error) {
 		Scopes:       append([]string{oidc.ScopeOpenID}, scopes...),
 	}
 	oidcConfig := &oidc.Config{
-		ClientID:       clientID,
-		SkipNonceCheck: true,
+		ClientID: clientID,
 	}
 	verifier := provider.Verifier(oidcConfig)
 
@@ -100,22 +99,53 @@ issuerUrl string) (*Authenticator, error) {
 		}
 	}
 	redirectMap := TTLMap{m: make(map[string]Value)}
+	logoutURL := conf.GetStringValue("engine.logout_redirect_url")
+	if logoutURL == "" {
+		logoutURL = "/"
+	}
 
 	authneticator := &Authenticator{
-		provider:    provider,
-		verifier:    verifier,
-		ctx:         ctx,
-		cookieName:  "goidc",
-		signer:      NewSigner(conf.Config.Engine.Signkey),
-		acr:         acrVal,
-		tfPrinipals: tfPMap,
-		redirectMap: redirectMap,
+		provider:     provider,
+		verifier:     verifier,
+		ctx:          ctx,
+		cookieName:   "goidc",
+		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
+		acr:          acrVal,
+		tfPrinipals:  tfPMap,
+		logoutURL:    logoutURL,
+		redirectMap:  redirectMap,
+		clientConfig: oauthConfig,
 	}
 
 	// Expire enteries in a seperate routines
 	go expireEnteries(authneticator.redirectMap)
 
 	return authneticator, nil
+}
+
+func getUserGroups(token *oauth2.Token, groupURLs []string) []string {
+	var groups []string
+	groupsOut := make(chan []string)
+	for _, groupURL := range groupURLs {
+		go func(currGroupURL string) {
+			userGroups, err := getGroups(token.AccessToken, currGroupURL)
+
+			if err != nil {
+				log.Warnf("Unable to fetch groups from: %s, failed with: %s", currGroupURL, err)
+			}
+
+			groupsOut <- userGroups
+		}(groupURL)
+	}
+
+	for _ = range groupURLs {
+		select {
+		case newGroups := <-groupsOut:
+			groups = append(groups, newGroups...)
+		}
+	}
+
+	return groups
 }
 
 func (a *Authenticator) callbackHandler() http.Handler {
@@ -128,11 +158,11 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
-		log.Debug("Got response back for state: " + c.Name + " from Source IPs ", GetIPsFromRequest(r))
-		token, err := oauthConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
+		log.Debug("Got response back for state: "+c.Name+" from Source IPs ", GetIPsFromRequest(r))
+		token, err := a.clientConfig.Exchange(a.ctx, r.URL.Query().Get("code"))
 		if err != nil {
-			log.Warn("No token found: %v", err)
-			w.WriteHeader(http.StatusUnauthorized)
+			log.Warnf("No token found: %v", err)
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		log.Debug("token.Extra('id_token').(string)")
@@ -151,9 +181,9 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		var groups []string
-		log.Debug("conf.Config.Engine.GroupEndpoint",conf.Config.Engine.GroupEndpoint)
-		if conf.Config.Engine.GroupEndpoint != "" {
-			groups, _ = getGroups(token.AccessToken, conf.Config.Engine.GroupEndpoint)
+		if conf.GetStringValue("engine.groups_endpoint") != "" {
+			groupURLs := strings.Split(conf.GetStringValue("engine.groups_endpoint"), ",")
+			groups = getUserGroups(token, groupURLs)
 		}
 
 		// Check if this given principals are allowed to access resource
@@ -161,10 +191,30 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		if conf.Config.Engine.AuthorizedPrincipals != "" {
 			authzPrinipals := strings.Split(conf.Config.Engine.AuthorizedPrincipals, ",")
 			authorized := false
-			for _, grp := range groups {
+
+			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
+			if err != nil {
+				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
+			} else {
 				for _, p := range authzPrinipals {
-					if p == grp {
+					if p == "fc:uid:"+userInfo.Subject {
 						authorized = true
+						break
+					}
+				}
+			}
+
+			if !authorized {
+				for _, grp := range groups {
+					if authorized == true {
+						break
+					}
+
+					for _, p := range authzPrinipals {
+						if p == grp {
+							authorized = true
+							break
+						}
 					}
 				}
 			}
@@ -176,8 +226,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		}
 
 		// Get user info and see if user/affiliations are in the list of twofactor_principals
-		if !conf.Config.Engine.TwoFactor.All && a.acr != nil {
-			userInfo, err := a.provider.UserInfo(a.ctx, oauthConfig.TokenSource(a.ctx, token))
+		if !conf.GetBoolValue("engine.twofactor.all") && a.acr != nil {
+			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				log.Warn("Failed in getting User Info: " + err.Error() + " ", GetIPsFromRequest(r))
 				http.Error(w, "Failed in getting User Info: " + err.Error(), http.StatusInternalServerError)
@@ -195,7 +245,8 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				if rediect {
 					log.Debug("Redirecting for Two factor auth with UserID ", userInfo.Subject)
 					addEntry(a.redirectMap, userInfo.Subject, time.Now().Unix())
-					w.Write(getRedirectJS(c.Name, oauthConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
+					w.WriteHeader(http.StatusForbidden)
+					w.Write(getRedirectJS(c.Name, a.clientConfig.AuthCodeURL(r.URL.Query().Get("state"), a.acr)))
 					return
 				}
 			}
@@ -306,10 +357,12 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 
 			// Check if we have two factor enable for all or selected principals, if for selected
 			//  we will redirect for twofactor auth after getting user identity
-			if a.acr != nil && conf.Config.Engine.TwoFactor.All {
-				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.WriteHeader(http.StatusForbidden)
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
@@ -329,10 +382,12 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 			// Token is not valid, so redirecting to authenticate again
-			if a.acr != nil && conf.Config.Engine.TwoFactor.All {
-				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String(), a.acr)))
+			if a.acr != nil && conf.GetBoolValue("engine.twofactor.all") {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String(), a.acr)))
 			} else {
-				w.Write(getRedirectJS("state." + uid.String(), oauthConfig.AuthCodeURL(uid.String())))
+				w.WriteHeader(http.StatusForbidden)
+				w.Write(getRedirectJS("state."+uid.String(), a.clientConfig.AuthCodeURL(uid.String())))
 			}
 			return
 		}
@@ -389,4 +444,25 @@ func (a *Authenticator) checkTwoFactorAuth(token string, userInfo *oidc.UserInfo
 	}
 
 	return false, nil
+}
+
+func (a *Authenticator) logoutHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		i := 0
+		for {
+			cookie, err := r.Cookie(a.cookieName + strconv.Itoa(i))
+			if err == nil {
+				cookie.Expires = time.Now().AddDate(-10, 0, 0)
+				cookie.Value = "42"
+				cookie.Path = "/"
+				cookie.HttpOnly = true
+				http.SetCookie(w, cookie)
+			} else {
+				break
+			}
+			i += 1
+		}
+		log.Debug("logging out user")
+		http.Redirect(w, r, a.logoutURL, http.StatusFound)
+	})
 }
