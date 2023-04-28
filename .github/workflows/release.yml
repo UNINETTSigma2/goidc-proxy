@@ -8,34 +8,26 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Set up Go
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
         with:
           go-version: 1.18
-      - name: Get current version
-        uses: actions-ecosystem/action-get-latest-tag@v1
-        id: get-latest-tag
-      - name: Bump semantic version
-        id: bump-semver
-        uses: jsok/svu-version-bump-action@v2
+      - uses: golangci/golangci-lint-action@v3
+  release:
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
         with:
-          bump: 'next'
-      - name: Tag version
-        if: ${{ steps.get-latest-tag.outputs.tag != steps.bump-semver.outputs.version && steps.bump-semver.outputs.version != null }}
-        uses: actions-ecosystem/action-push-tag@v1
+          go-version: 1.18
+      - uses: go-semantic-release/action@v1
         with:
-          tag: ${{ steps.bump-semver.outputs.version }}
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
-        if: ${{ steps.get-latest-tag.outputs.tag != steps.bump-semver.outputs.version && steps.bump-semver.outputs.version != null }}
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --rm-dist
+          hooks: goreleaser
         env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
