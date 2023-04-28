@@ -1,0 +1,44 @@
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+builds:
+  - env:
+    - CGO_ENABLED=0
+    goos:
+    - linux
+    - windows
+    - darwin
+archives:
+  - replacements:
+      386: i386
+      amd64: x86_64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: '{{ incpatch .Version }}-next'
+nfpms:
+  - id: nird-goidc-proxy
+    package_name: nird-goidc-proxy
+    replacements:
+      amd64: 64-bit
+      386: 32-bit
+    vendor: Sigma2 AS
+    homepage: https://github.com/UNINETTSigma2/goidc-proxy
+    maintainer: Sigma2 AS <post@sigma2.no>
+    description: |-
+      NIRD TOOLKIT authentication proxy for workloads
+    license: MIT
+    formats:
+      - deb
+      - rpm
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+release:
+  github:
+    owner: UNINETTSigma2
+
