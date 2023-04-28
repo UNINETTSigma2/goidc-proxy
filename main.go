@@ -12,7 +12,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/uninett/goidc-proxy/conf"
+	"github.com/uninettsigma2/goidc-proxy/conf"
 )
 
 var version = "none"

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SermoDigital/jose/jws"
 	"github.com/m4rw3r/uuid"
 	"github.com/uninett/goidc-proxy/conf"
 	"golang.org/x/oauth2"
@@ -24,16 +23,18 @@ type UserIDSec struct {
 }
 
 type Authenticator struct {
-	provider     *oidc.Provider
-	verifier     *oidc.IDTokenVerifier
-	clientConfig oauth2.Config
-	ctx          context.Context
-	cookieName   string
-	signer       *Signer
-	acr          oauth2.AuthCodeOption
-	tfPrinipals  map[string]struct{}
-	redirectMap  TTLMap
-	logoutURL    string
+	provider          *oidc.Provider
+	verifier          *oidc.IDTokenVerifier
+	clientConfig      oauth2.Config
+	ctx               context.Context
+	cookieName        string
+	signer            *Signer
+	acr               oauth2.AuthCodeOption
+	tfPrinipals       map[string]struct{}
+	redirectMap       TTLMap
+	logoutURL         string
+	oidcGroupsClaim   string
+	oidcUsernameClaim string
 }
 
 func newAuthenticator(
@@ -81,17 +82,29 @@ func newAuthenticator(
 		logoutURL = "/"
 	}
 
+	var groupsClaim string
+	if conf.GetStringValue("engine.groups_claim") != "" {
+		groupsClaim = conf.GetStringValue("engine.groups_claim")
+	}
+
+	var usernameClaim string
+	if conf.GetStringValue("engine.username_claim") != "" {
+		usernameClaim = conf.GetStringValue("engine.username_claim")
+	}
+
 	authneticator := &Authenticator{
-		provider:     provider,
-		verifier:     verifier,
-		ctx:          ctx,
-		cookieName:   "goidc",
-		signer:       NewSigner(conf.GetStringValue("engine.signkey")),
-		acr:          acrVal,
-		tfPrinipals:  tfPMap,
-		logoutURL:    logoutURL,
-		redirectMap:  redirectMap,
-		clientConfig: oauthConfig,
+		provider:          provider,
+		verifier:          verifier,
+		ctx:               ctx,
+		cookieName:        "goidc",
+		signer:            NewSigner(conf.GetStringValue("engine.signkey")),
+		acr:               acrVal,
+		tfPrinipals:       tfPMap,
+		logoutURL:         logoutURL,
+		redirectMap:       redirectMap,
+		clientConfig:      oauthConfig,
+		oidcGroupsClaim:   groupsClaim,
+		oidcUsernameClaim: usernameClaim,
 	}
 
 	// Expire enteries in a seperate routines
@@ -149,17 +162,60 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			return
 		}
 
-		_, err = a.verifier.Verify(a.ctx, oidcToken)
+		idToken, err := a.verifier.Verify(a.ctx, oidcToken)
 		if err != nil {
 			log.Info("Failed to verify OpenID Token "+err.Error()+" ", GetIPsFromRequest(r))
 			http.Error(w, "Failed to verify OpenID Token: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		var groups []string
+		var principals []string
+		// Extract groups from ID if oidc_groups_claim is specified
+		if conf.GetStringValue("engine.groups_claim") != "" {
+			var claims map[string]interface{}
+			if err := idToken.Claims(&claims); err != nil {
+				log.Info("Valied to extract group claim from OpenID token")
+				http.Error(
+					w,
+					"Failed to extract claims from OpenID Token: "+err.Error(),
+					http.StatusInternalServerError,
+				)
+				return
+			}
+			log.Infof("Found claims: %v", claims)
+			if claimValues, found := claims[conf.GetStringValue("engine.groups_claim")]; found {
+				log.Infof("Found claimValue: %s", claimValues)
+				for _, claimValue := range claimValues.([]interface{}) {
+					group := claimValue.(string)
+					log.Infof("Found group: %s", group)
+					principals = append(principals, group)
+				}
+			}
+		}
+
+		// Obtain groups from groups endpoint if configured
 		if conf.GetStringValue("engine.groups_endpoint") != "" {
 			groupURLs := strings.Split(conf.GetStringValue("engine.groups_endpoint"), ",")
-			groups = getUserGroups(token, groupURLs)
+			principals = append(principals, getUserGroups(token, groupURLs)...)
+		}
+
+		// Extract username from token if oidc_username_claim is specified
+		if conf.GetStringValue("engine.username_claim") != "" {
+			var claims map[string]interface{}
+			if err := idToken.Claims(&claims); err != nil {
+				log.Info("Failed to extract username claim from OpenID token")
+				http.Error(
+					w,
+					"Failed to extract group claim from OpenID token: "+err.Error(),
+					http.StatusInternalServerError,
+				)
+				return
+			}
+			if claimValue, found := claims[conf.GetStringValue("engine.username_claim")]; found {
+				username := claimValue.(string)
+				log.Infof("Found principal %s from username claim property", username)
+				principals = append(principals, username)
+			}
 		}
 
 		// Check if this given principals are allowed to access resource
@@ -167,11 +223,14 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			authzPrinipals := strings.Split(conf.GetStringValue("engine.authorized_principals"), ",")
 			authorized := false
 
+			log.Debugf("Authorized principals: %v", authzPrinipals)
+
 			userInfo, err := a.provider.UserInfo(a.ctx, a.clientConfig.TokenSource(a.ctx, token))
 			if err != nil {
 				log.Warn("Failed in getting User Info: "+err.Error()+" ", GetIPsFromRequest(r))
 			} else {
 				for _, p := range authzPrinipals {
+					log.Debugf("Checking if %v equal %v", p, "fc:uid:"+userInfo.Subject)
 					if p == "fc:uid:"+userInfo.Subject {
 						authorized = true
 						break
@@ -179,19 +238,33 @@ func (a *Authenticator) callbackHandler() http.Handler {
 				}
 			}
 
+			log.Debugf("Checking authorized groups")
 			if !authorized {
-				for _, grp := range groups {
-					if authorized == true {
+				for _, principal := range principals {
+					if authorized {
 						break
 					}
-
-					for _, p := range authzPrinipals {
-						if p == grp {
+					log.Debugf("Checking if %v is authorized", principal)
+					for _, validPrincipal := range authzPrinipals {
+						if principal == validPrincipal {
+							log.Debugf("%v is authorized", principal)
 							authorized = true
 							break
 						}
 					}
 				}
+				// for _, grp := range groups {
+				// 	if authorized {
+				// 		break
+				// 	}
+
+				// 	for _, p := range authzPrinipals {
+				// 		if p == grp {
+				// 			authorized = true
+				// 			break
+				// 		}
+				// 	}
+				// }
 			}
 			if !authorized {
 				log.Debug("User is not authorized to access ", GetIPsFromRequest(r))
@@ -211,7 +284,7 @@ func (a *Authenticator) callbackHandler() http.Handler {
 
 			// Check if we are have redirected already then create cookie directly
 			if getEntry(a.redirectMap, userInfo.Subject) == 0 {
-				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo, groups)
+				rediect, err := a.checkTwoFactorAuth(token.AccessToken, userInfo, principals)
 				if err != nil {
 					log.Warn("Failed to check user affiliations: "+err.Error()+" ", GetIPsFromRequest(r))
 					http.Error(w, "Failed to check user affiliations: "+err.Error(), http.StatusInternalServerError)
@@ -233,26 +306,29 @@ func (a *Authenticator) callbackHandler() http.Handler {
 		var cToken string
 		var maxAge int
 		var expiry int64
-		if conf.GetStringValue("engine.token_type") == "jwt" {
-			cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
-			if err != nil {
-				log.Warn("Failed to get JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
-				http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			parseJWT, err := jws.ParseJWT([]byte(cToken))
-			if err != nil {
-				log.Info("Failed to parse JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
-				http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			maxAge = int(parseJWT.Claims().Get("exp").(float64) - float64(time.Now().Unix()))
-			expiry = int64(parseJWT.Claims().Get("exp").(float64))
-		} else {
-			cToken = token.AccessToken
-			maxAge = int(token.Expiry.Unix() - time.Now().Unix())
-			expiry = int64(token.Expiry.Unix())
-		}
+		// if conf.GetStringValue("engine.token_type") == "jwt" {
+		// 	cToken, err = getJWTToken(token.AccessToken, conf.GetStringValue("engine.jwt_token_issuer"))
+		// 	if err != nil {
+		// 		log.Warn("Failed to get JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
+		// 		http.Error(w, "Failed to get JWT token: "+err.Error(), http.StatusInternalServerError)
+		// 		return
+		// 	}
+		// 	parseJWT, err := jws.ParseJWT([]byte(cToken))
+		// 	if err != nil {
+		// 		log.Info("Failed to parse JWT token: "+err.Error()+" ", GetIPsFromRequest(r))
+		// 		http.Error(w, "Failed to parse JWT token: "+err.Error(), http.StatusInternalServerError)
+		// 		return
+		// 	}
+		// 	maxAge = int(parseJWT.Claims().Get("exp").(float64) - float64(time.Now().Unix()))
+		// 	expiry = int64(parseJWT.Claims().Get("exp").(float64))
+		// } else {
+		// 	cToken = token.AccessToken
+		// 	maxAge = int(token.Expiry.Unix() - time.Now().Unix())
+		// 	expiry = int64(token.Expiry.Unix())
+		// }
+		cToken = token.AccessToken
+		maxAge = int(token.Expiry.Unix() - time.Now().Unix())
+		expiry = int64(token.Expiry.Unix())
 
 		// Setup the cookie which will be used by client to authn later
 		cValue := a.signer.getSignedData(cToken + SEP + strconv.FormatInt(expiry, 10))
@@ -281,7 +357,10 @@ func (a *Authenticator) callbackHandler() http.Handler {
 			log.Warn("Failed unescaping state cookie, setting to / ", err)
 			unescapedStateCookie = "/"
 		}
-		log.Debug("Redirecting to original path "+unescapedStateCookie+" after successful authnetication ", GetIPsFromRequest(r))
+		log.Debug(
+			"Redirecting to original path "+unescapedStateCookie+" after successful authnetication ",
+			GetIPsFromRequest(r),
+		)
 
 		http.Redirect(w, r, unescapedStateCookie, http.StatusFound)
 	})
@@ -294,7 +373,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
-				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
+				log.Debug(
+					"XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ",
+					GetIPsFromRequest(r),
+				)
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 
@@ -318,7 +400,7 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 
 		recToken, valid := a.checkTokenValidity(cValue)
 		if !valid {
-			log.Info("Got invalid token, rediecting for authnetication", GetIPsFromRequest(r))
+			log.Info("Got invalid token, redirecting for authentication", GetIPsFromRequest(r))
 			uid, err := uuid.V4()
 			if err != nil {
 				log.Warn("Failed in getting UUID", err)
@@ -327,7 +409,10 @@ func (a *Authenticator) authHandler(next http.Handler) http.Handler {
 			// Check if it is a XHR request, then send 401. As browser will not handle
 			// redirect in this. Application has to handle the error by itself
 			if isXHR(r.URL.Path) {
-				log.Debug("XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ", GetIPsFromRequest(r))
+				log.Debug(
+					"XHR request is unauthenticated, will send 401 not redirect "+r.URL.Path+" ",
+					GetIPsFromRequest(r),
+				)
 				http.Error(w, "Unauthenticate XHR request, will not redirect", http.StatusUnauthorized)
 			}
 			// Token is not valid, so redirecting to authenticate again

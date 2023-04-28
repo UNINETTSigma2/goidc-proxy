@@ -1,6 +1,19 @@
-FROM alpine:3.7
-LABEL maintainer Uninett AS <system@uninett.no>
-RUN apk update && apk add --no-cache ca-certificates=20171114-r0 && rm -rf /var/cache/apk/*
-COPY goidc-proxy /bin/
-USER nobody
-CMD ["/bin/goidc-proxy"]
+FROM golang:1.18 as builder
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+RUN go mod download
+
+COPY . . 
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o goidc-proxy
+
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder /workspace/goidc-proxy .
+USER 65532:65532
+
+ENTRYPOINT ["/goidc-proxy"]
+

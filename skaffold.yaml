@@ -1,0 +1,27 @@
+apiVersion: skaffold/v2beta26
+kind: Config
+metadata:
+  name: goidc-proxy
+build:
+  local:
+    concurrency: 1
+  artifacts:
+    - image: sigma2as/goidc-proxy
+      ko:
+        flags:
+          - -v
+        fromImage: gcr.io/distroless/base:debug-nonroot
+        dependencies:
+          paths:
+            - "**/*"
+            - go.mod
+
+deploy:
+  helm:
+    releases:
+    - name: goidc-proxy-httpbin
+      chartPath: hacking/chart
+      artifactOverrides:
+        image: sigma2as/goidc-proxy
+      imageStrategy:
+        helm: {}

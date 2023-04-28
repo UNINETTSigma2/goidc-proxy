@@ -10,6 +10,8 @@
 		"redirect_url": "http://localhost:8888/oauth2/callback",
 		"scopes": "userid,groups",
 		"signkey": "testtesttesttest",
+		"groups_claim": "principals",
+		"username_claim": "sub",
 		"groups_endpoint": "https://groups-api.dataporten.no/groups/me/groups",
 		"token_type": "oauth2",
 		"jwt_token_issuer": "https://jwt.example.no",
