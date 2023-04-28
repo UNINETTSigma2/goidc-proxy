@@ -3,7 +3,6 @@ module github.com/uninettsigma2/goidc-proxy
 go 1.18
 
 require (
-	github.com/SermoDigital/jose v0.9.2-0.20161205225155-2bd9b81ac51d
 	github.com/Sirupsen/logrus v0.11.4
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/coreos/go-oidc v0.0.0-20180117170138-065b426bd416
