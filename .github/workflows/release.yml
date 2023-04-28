@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
 
-premissions:
+permissions:
   contents: write
 
 jobs:
