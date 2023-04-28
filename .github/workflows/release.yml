@@ -27,10 +27,15 @@ jobs:
           bump: 'next'
       - name: Tag version
         if: ${{ steps.get-latest-tag.outputs.tag != steps.bump-semver.outputs.version && steps.bump-semver.outputs.version != null }}
+        uses: actions-ecosystem/action-push-tag@v1
+        with:
+          tag: ${{ steps.bump-semver.outputs.version }}
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        if: ${{ steps.get-latest-tag.outputs.tag != steps.bump-semver.outputs.version && steps.bump-semver.outputs.version != null }}
         with:
           distribution: goreleaser
           version: latest
           args: release --rm-dist
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-
